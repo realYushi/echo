@@ -67,3 +67,36 @@ PR3: LangGraph agent — 6-node graph + persona extraction + embedding + retriev
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Update backend specs with PR2 patterns
+
+**Date**: 2026-04-13
+**Task**: Update backend specs with PR2 patterns
+**Branch**: `main`
+
+### Summary
+
+Updated 3 spec files: directory-structure.md (added app/data/), database-guidelines.md (real Qdrant patterns: idempotent collection creation, UUID5 point IDs, batch upsert, query_points API, common mistake), quality-guidelines.md (lazy singleton + asyncio.to_thread examples).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `92847b3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
