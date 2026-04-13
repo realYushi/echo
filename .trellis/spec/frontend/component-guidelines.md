@@ -6,54 +6,92 @@
 
 ## Overview
 
-<!--
-Document your project's component conventions here.
-
-Questions to answer:
-- What component patterns do you use?
-- How are props defined?
-- How do you handle composition?
-- What accessibility standards apply?
--->
-
-(To be filled by the team)
+React functional components with TypeScript. Tailwind CSS for styling. No class components.
 
 ---
 
 ## Component Structure
 
-<!-- Standard structure of a component file -->
+Standard order within a component file:
 
-(To be filled by the team)
+```tsx
+// 1. Imports
+import { useState } from "react";
+import type { Product } from "@/types/product";
+
+// 2. Types (if component-local)
+interface ProductCardProps {
+  product: Product;
+  onFeedback: (productId: string, signal: "like" | "dislike") => void;
+}
+
+// 3. Component
+export function ProductCard({ product, onFeedback }: ProductCardProps) {
+  // hooks first
+  const [isHovered, setIsHovered] = useState(false);
+
+  // handlers
+  function handleLike() {
+    onFeedback(product.id, "like");
+  }
+
+  // render
+  return (
+    <div className="rounded-lg border p-4">
+      ...
+    </div>
+  );
+}
+```
 
 ---
 
 ## Props Conventions
 
-<!-- How props should be defined and typed -->
+- Define props as an `interface` named `{Component}Props` in the same file
+- Destructure props in the function signature
+- Use `children: React.ReactNode` for composition, not custom render props
+- Event handlers: `on{Event}` naming (`onFeedback`, `onSend`, `onClose`)
 
-(To be filled by the team)
+```tsx
+// Good: explicit interface
+interface ChatInputProps {
+  onSend: (message: string) => void;
+  disabled?: boolean;
+}
+
+// Bad: inline types
+function ChatInput({ onSend, disabled }: { onSend: (m: string) => void; disabled?: boolean }) { ... }
+```
 
 ---
 
 ## Styling Patterns
 
-<!-- How styles are applied (CSS modules, styled-components, Tailwind, etc.) -->
+- **Tailwind CSS** for all styling
+- Use `cn()` helper (from `clsx` + `tailwind-merge`) for conditional classes
+- No CSS modules or styled-components
+- Responsive: desktop-first (the discovery UI is desktop-only for MVP)
 
-(To be filled by the team)
+```tsx
+import { cn } from "@/lib/utils";
+
+<div className={cn("rounded-lg border", isActive && "border-blue-500")} />
+```
 
 ---
 
 ## Accessibility
 
-<!-- A11y requirements and patterns -->
-
-(To be filled by the team)
+- Interactive elements must be `<button>` or `<a>`, not `<div onClick>`
+- Images require `alt` text
+- Form inputs require associated labels
+- Focus management for the chat input after message send
 
 ---
 
 ## Common Mistakes
 
-<!-- Component-related mistakes your team has made -->
-
-(To be filled by the team)
+- **Don't put business logic in components** — extract to hooks or `lib/`
+- **Don't use `useEffect` for derived state** — compute during render
+- **Don't create wrapper components that just pass props through** — compose directly

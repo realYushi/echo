@@ -6,7 +6,19 @@
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+Python backend using **FastAPI** (async), **SQLAlchemy** (async ORM) + **Alembic** (migrations) for PostgreSQL, and **Qdrant** for vector search. LLM orchestration via **LangGraph** with **Claude** as the LLM.
+
+---
+
+## Pre-Development Checklist
+
+Before writing backend code, read the guidelines relevant to your task:
+
+1. **Always read**: [Directory Structure](./directory-structure.md) — know where files go
+2. **If touching DB or Qdrant**: [Database Guidelines](./database-guidelines.md)
+3. **If adding/modifying endpoints**: [Error Handling](./error-handling.md)
+4. **If adding observability**: [Logging Guidelines](./logging-guidelines.md)
+5. **Before committing**: [Quality Guidelines](./quality-guidelines.md) — checklist at the bottom
 
 ---
 
@@ -14,24 +26,25 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Directory Structure](./directory-structure.md) | Module organization and file layout | Filled (lightweight) |
+| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Filled (lightweight) |
+| [Error Handling](./error-handling.md) | Error types, handling strategies | Filled (lightweight) |
+| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Filled (lightweight) |
+| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Filled (lightweight) |
 
 ---
 
-## How to Fill These Guidelines
+## Quick Reference
 
-For each guideline file:
-
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
-
-The goal is to help AI assistants and new team members understand how YOUR project works.
+- **Language**: Python 3.12+
+- **Framework**: FastAPI (async)
+- **ORM**: SQLAlchemy (async) + Alembic
+- **Vector DB**: Qdrant
+- **LLM**: Claude via Anthropic SDK
+- **Agent**: LangGraph
+- **Linter**: Ruff
+- **Type checker**: mypy (strict)
+- **Tests**: pytest + pytest-asyncio
 
 ---
 
