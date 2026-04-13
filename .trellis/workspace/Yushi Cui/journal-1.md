@@ -100,3 +100,64 @@ Updated 3 spec files: directory-structure.md (added app/data/), database-guideli
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: PR3 review: LangGraph agent
+
+**Date**: 2026-04-13
+**Task**: PR3 review: LangGraph agent
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## What was done
+- Reviewed PR3 (LangGraph agent) implemented by Codex
+- 6-node graph: greet → discover → extract_persona → embed_persona → recommend → feedback
+- Claude integration for conversation + persona extraction
+- Persona JSON → embedding conversion + Qdrant retrieval
+- InMemorySaver checkpointer (PostgreSQL deferred)
+
+## Review Results
+- All checks pass: ruff, mypy, pytest (5/5)
+- 1 minor fix: removed redundant runtime import in `persona.py`
+- Code quality: typed exceptions, type hints enforced, clean architecture
+
+## Key Files
+- `backend/app/agent/graph.py` — LangGraph graph wiring
+- `backend/app/agent/nodes.py` — 6 node implementations
+- `backend/app/agent/state.py` — agent state schema
+- `backend/app/services/persona.py` — persona extraction + embedding
+- `backend/tests/test_agent_graph.py` — graph tests
+- `backend/tests/test_persona.py` — persona tests
+- `.trellis/spec/backend/agent-recommendation-flow.md` — spec added
+
+## Notes
+- InMemorySaver means sessions don't survive restarts (known, spec-acknowledged)
+- `apply_feedback()` adds style tags from disliked products — potential drift, matches spec
+- Updated task.json: status → in-progress, PR1/PR2 subtasks → done
+
+## Next
+- PR4: API layer (SSE streaming, chat/recommend/feedback endpoints) — Codex to implement
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `adde887` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
