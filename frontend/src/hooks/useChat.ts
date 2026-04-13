@@ -1,39 +1,153 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import type { Message } from "@/types/chat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { streamChat } from "@/lib/sse";
+import type { ChatRequest, Message } from "@/types/chat";
+import type { Persona } from "@/types/persona";
+
+interface UseChatOptions {
+  persona: Persona | null;
+  onPersonaUpdate: (persona: Persona) => void;
+  onTurnComplete?: () => Promise<void> | void;
+}
 
 interface UseChatReturn {
   messages: Message[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
   error: string | null;
 }
 
-export function useChat(_sessionId: string): UseChatReturn {
+function createMessage(role: Message["role"], content: string): Message {
+  return {
+    id: crypto.randomUUID(),
+    role,
+    content,
+  };
+}
+
+function appendAssistantContent(
+  messages: Message[],
+  content: string,
+): Message[] {
+  const lastMessage = messages.at(-1);
+  if (lastMessage?.role === "assistant") {
+    return [
+      ...messages.slice(0, -1),
+      {
+        ...lastMessage,
+        content: `${lastMessage.content}${content}`,
+      },
+    ];
+  }
+
+  return [...messages, createMessage("assistant", content)];
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Unable to reach Echo right now. Please try again.";
+}
+
+export function useChat(
+  sessionId: string,
+  options: UseChatOptions,
+): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const { persona, onPersonaUpdate, onTurnComplete } = options;
 
-  const sendMessage = useCallback((content: string) => {
-    setError(null);
-    setMessages((prev) => [...prev, { role: "user", content }]);
-
-    // TODO: Wire up SSE streaming via lib/sse.ts
-    // For now, add a placeholder assistant response
-    setIsStreaming(true);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "This is a placeholder response. Chat streaming will be implemented in a later PR.",
-        },
-      ]);
-      setIsStreaming(false);
-    }, 500);
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
   }, []);
+
+  const sendMessage = useCallback(
+    async (content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed || isStreaming) {
+        return;
+      }
+
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      setError(null);
+      setMessages((prev) => [...prev, createMessage("user", trimmed)]);
+      setIsStreaming(true);
+
+      let streamErrored = false;
+      let receivedAssistantContent = false;
+
+      try {
+        const request: ChatRequest = {
+          sessionId,
+          message: trimmed,
+          persona,
+        };
+
+        await streamChat(
+          request,
+          (event) => {
+            switch (event.type) {
+              case "token":
+                receivedAssistantContent = true;
+                setMessages((prev) =>
+                  appendAssistantContent(prev, event.content),
+                );
+                return;
+              case "persona_update":
+                onPersonaUpdate(event.persona);
+                return;
+              case "error":
+                streamErrored = true;
+                setError(event.message);
+                if (!receivedAssistantContent) {
+                  setMessages((prev) =>
+                    appendAssistantContent(prev, event.message),
+                  );
+                }
+                return;
+              case "done":
+                return;
+            }
+          },
+          controller.signal,
+        );
+
+        if (!streamErrored) {
+          await onTurnComplete?.();
+        }
+      } catch (nextError) {
+        if (isAbortError(nextError)) {
+          return;
+        }
+
+        const message = getErrorMessage(nextError);
+        setError(message);
+        if (!receivedAssistantContent) {
+          setMessages((prev) => appendAssistantContent(prev, message));
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+        setIsStreaming(false);
+      }
+    },
+    [isStreaming, onPersonaUpdate, onTurnComplete, persona, sessionId],
+  );
 
   return { messages, sendMessage, isStreaming, error };
 }

@@ -1,40 +1,57 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
+import { postFeedback } from "@/lib/api";
 import type { Persona, FeedbackSignal } from "@/types/persona";
 import { EMPTY_PERSONA } from "@/types/persona";
 
-interface PersonaSignal {
-  productId: string;
-  signal: FeedbackSignal;
-}
-
 interface UsePersonaReturn {
   persona: Persona;
-  addSignal: (signal: PersonaSignal) => void;
+  setPersona: (persona: Persona) => void;
+  sendFeedback: (
+    productId: string,
+    signal: FeedbackSignal,
+  ) => Promise<Persona | null>;
+  isSubmitting: boolean;
+  error: string | null;
 }
 
-export function usePersona(): UsePersonaReturn {
-  const [persona, setPersona] = useState<Persona>(EMPTY_PERSONA);
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
 
-  const addSignal = useCallback(
-    (signal: PersonaSignal) => {
-      // TODO: Send feedback to backend and update persona from response
-      setPersona((prev) => {
-        if (signal.signal === "like") {
-          return {
-            ...prev,
-            approvals: [...prev.approvals, signal.productId],
-          };
-        }
-        return {
-          ...prev,
-          rejections: [...prev.rejections, signal.productId],
-        };
-      });
+  return "Unable to update your taste profile right now.";
+}
+
+export function usePersona(sessionId: string): UsePersonaReturn {
+  const [persona, setPersonaState] = useState<Persona>(EMPTY_PERSONA);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const setPersona = useCallback((nextPersona: Persona) => {
+    setError(null);
+    setPersonaState(nextPersona);
+  }, []);
+
+  const sendFeedback = useCallback(
+    async (productId: string, signal: FeedbackSignal) => {
+      setIsSubmitting(true);
+      setError(null);
+
+      try {
+        const response = await postFeedback(productId, signal, sessionId);
+        setPersonaState(response.persona);
+        return response.persona;
+      } catch (nextError) {
+        setError(getErrorMessage(nextError));
+        return null;
+      } finally {
+        setIsSubmitting(false);
+      }
     },
-    [],
+    [sessionId],
   );
 
-  return { persona, addSignal };
+  return { persona, setPersona, sendFeedback, isSubmitting, error };
 }

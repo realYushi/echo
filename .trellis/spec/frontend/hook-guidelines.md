@@ -19,19 +19,25 @@ One hook per concern. Hooks return typed objects (not arrays). Every hook define
 ```tsx
 interface UseChatReturn {
   messages: Message[];
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
   error: string | null;
 }
 
-export function useChat(_sessionId: string): UseChatReturn {
+interface UseChatOptions {
+  persona: Persona | null;
+  onPersonaUpdate: (persona: Persona) => void;
+  onTurnComplete?: () => Promise<void> | void;
+}
+
+export function useChat(_sessionId: string, _options: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback(async (content: string) => {
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", content }]);
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content }]);
     // ... streaming logic
   }, []);
 
@@ -53,36 +59,37 @@ function useChat(sessionId: string) {
 
 ### useChat (`src/hooks/useChat.ts`)
 
-- **Params**: `sessionId: string`
+- **Params**: `sessionId: string`, `options: { persona, onPersonaUpdate, onTurnComplete? }`
 - **Returns**: `UseChatReturn { messages, sendMessage, isStreaming, error }`
-- **Pattern**: Wraps `useState` + `useCallback`. Appends user message optimistically, then triggers assistant response. Currently uses a `setTimeout` placeholder -- will wire to `lib/sse.ts` `streamChat()` in a later PR.
-- **Key detail**: Uses functional `setMessages((prev) => [...prev, newMsg])` to avoid stale closure over messages array.
+- **Pattern**: Wraps `useState` + `useCallback`. Appends the user message optimistically, streams SSE events through `lib/sse.ts`, appends assistant content incrementally, and hands persona updates back to the page coordinator.
+- **Key detail**: Uses stable `Message.id` keys plus functional `setMessages((prev) => ...)` updates so streamed assistant content never closes over stale state.
 
 ### useRecommendations (`src/hooks/useRecommendations.ts`)
 
 - **Params**: `sessionId: string`
-- **Returns**: `UseRecommendationsReturn { products: Recommendation[], isLoading, error }`
-- **Pattern**: Stub that returns empty arrays. Will call `lib/api.ts` `fetchRecommendations()` when persona has >= 2 signals.
+- **Returns**: `UseRecommendationsReturn { products: Recommendation[], isLoading, error, refreshRecommendations }`
+- **Pattern**: Owns the recommendation list, loading state, and refresh function. Calls `lib/api.ts` `fetchRecommendations()` with the `sessionId` and aborts in-flight refreshes on teardown or overlap.
 
 ### usePersona (`src/hooks/usePersona.ts`)
 
-- **Params**: none
-- **Returns**: `UsePersonaReturn { persona: Persona, addSignal }`
-- **Pattern**: Initializes with `EMPTY_PERSONA` constant from `src/types/persona.ts`. `addSignal` accepts `{ productId, signal }` and updates approvals/rejections arrays. Will be wired to backend `postFeedback()` in a later PR.
-- **Key detail**: Defines a local `PersonaSignal` interface for the signal parameter.
+- **Params**: `sessionId: string`
+- **Returns**: `UsePersonaReturn { persona, setPersona, sendFeedback, isSubmitting, error }`
+- **Pattern**: Initializes with `EMPTY_PERSONA`, accepts persona snapshots from chat SSE, and sends feedback mutations through `postFeedback()`.
+- **Key detail**: `sendFeedback()` is async and returns the updated persona so the page coordinator can immediately trigger a recommendation refresh.
 
 ---
 
 ## Data Fetching
 
-- **SSE streaming** (chat responses): `lib/sse.ts` exports `streamChat()` -- accepts sessionId, message, and an `onEvent` callback typed as `(event: ChatEvent) => void`
+- **SSE streaming** (chat responses): `lib/sse.ts` exports `streamChat()` -- accepts a full `ChatRequest`, an `onEvent` callback typed as `(event: ChatEvent) => void`, and an optional `AbortSignal`
 - **REST calls** (recommendations, feedback): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`
 - **No data fetching library for MVP** -- plain fetch is sufficient for 3 endpoints. Add React Query if complexity grows.
 
-**API client stubs** from `src/lib/api.ts`:
+**API client signatures** from `src/lib/api.ts`:
 ```tsx
 export async function postChat(
   _request: ChatRequest,
+  _signal?: AbortSignal,
 ): Promise<ReadableStream<Uint8Array>> { ... }
 
 export async function postFeedback(
@@ -93,20 +100,21 @@ export async function postFeedback(
 
 export async function fetchRecommendations(
   _sessionId: string,
-  _personaEmbedding: number[],
+  _personaEmbedding?: number[],
+  _signal?: AbortSignal,
 ): Promise<Recommendation[]> { ... }
 ```
 
-**SSE helper stub** from `src/lib/sse.ts`:
+**SSE helper** from `src/lib/sse.ts`:
 ```tsx
 export async function streamChat(
-  _sessionId: string,
-  _message: string,
+  _request: ChatRequest,
   _onEvent: (event: ChatEvent) => void,
+  _signal?: AbortSignal,
 ): Promise<void> { ... }
 ```
 
-Both `api.ts` and `sse.ts` currently throw `NotImplementedError`. When implementing, replace the throw with real fetch/SSE logic. The function signatures (params and return types) are the contract -- do not change them without updating all call sites.
+`fetchRecommendations()` may be called with only `sessionId`; the backend recommend router will reuse the session-backed persona embedding when the explicit embedding is omitted. Keep the client and backend session contract aligned.
 
 ---
 
@@ -135,6 +143,7 @@ Both `api.ts` and `sse.ts` currently throw `NotImplementedError`. When implement
 - **Don't call hooks conditionally** -- React rules of hooks apply
 - **Don't forget to handle the SSE connection teardown** -- close `EventSource` / abort `ReadableStream` on unmount
 - **Don't close over stale state in callbacks** -- use functional `setState` or `useCallback` with proper deps
+- **Don't key streamed message lists by array index** -- attach a stable `Message.id` when messages are created
 
 ---
 
@@ -144,6 +153,6 @@ Both `api.ts` and `sse.ts` currently throw `NotImplementedError`. When implement
 |---------|------|
 | Hook with explicit return interface | `src/hooks/useChat.ts` |
 | Hook with EMPTY constant init | `src/hooks/usePersona.ts` |
-| Hook stub returning empty state | `src/hooks/useRecommendations.ts` |
-| API client stubs (fetch wrappers) | `src/lib/api.ts` |
+| Session-backed recommendation refresh | `src/hooks/useRecommendations.ts` |
+| Typed API clients (fetch wrappers) | `src/lib/api.ts` |
 | SSE streaming helper | `src/lib/sse.ts` |

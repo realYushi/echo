@@ -34,6 +34,8 @@ TypeScript strict mode. ESLint 9 (flat config) + Prettier 3. Vitest 3 for testin
 - **Tailwind** -- all styling via utility classes, conditional classes via `cn()` from `src/lib/utils.ts`
 - **`"use client"` directive** -- required on any component that uses hooks, state, or event handlers
 - **`import type`** -- use for type-only imports throughout
+- **Explicit button semantics** -- shared UI button primitives default to `type="button"` unless submit behavior is intentional
+- **Runtime-valid image strategy** -- if product/catalog media comes from remote SVG placeholder services, use `next/image` with `unoptimized` or a plain `<img>` after verifying the source actually works through the optimizer
 
 ---
 
@@ -41,6 +43,7 @@ TypeScript strict mode. ESLint 9 (flat config) + Prettier 3. Vitest 3 for testin
 
 - **Framework**: Vitest 3 + React Testing Library 16
 - **Config**: `vitest.config.ts` -- jsdom environment, globals enabled, `@/` alias for imports
+- **TypeScript gotcha**: test files should import `describe`, `it`, `expect`, `vi`, and lifecycle helpers from `vitest` explicitly unless the project tsconfig includes Vitest types
 - **What to test**:
   - Custom hooks (`useChat`, `usePersona`, `useRecommendations`) -- these hold the business logic
   - Utility functions in `lib/` (e.g., `cn()` in `utils.ts`)
@@ -145,7 +148,9 @@ npm run test         # vitest
 - [ ] No `useEffect` for derived state
 - [ ] Loading and error states handled
 - [ ] Interactive elements are semantic HTML (`button`, `a`)
+- [ ] Shared buttons do not accidentally submit enclosing forms
 - [ ] Images have `alt` text
+- [ ] Remote image strategy is runtime-tested if using `next/image`
 - [ ] SSE / fetch connections clean up on unmount
 - [ ] New types added to `src/types/` if shared
 - [ ] `"use client"` directive present on components with hooks/handlers

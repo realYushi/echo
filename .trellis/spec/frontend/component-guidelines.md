@@ -27,33 +27,51 @@ Standard order within a component file:
 ```tsx
 "use client";
 
+import Image from "next/image";
 import type { Product } from "@/types/product";
 import { Button } from "@/components/ui/Button";
 
 interface ProductCardProps {
   product: Product;
-  onFeedback: (productId: string, signal: "like" | "dislike") => void;
+  score: number;
+  onFeedback: (productId: string, signal: "like" | "dislike") => Promise<void> | void;
+  disabled: boolean;
 }
 
-export function ProductCard({ product, onFeedback }: ProductCardProps) {
+export function ProductCard({ product, score, onFeedback, disabled }: ProductCardProps) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
       <div className="aspect-[4/3] bg-gray-100">
-        <img
+        <Image
           src={product.imageUrl}
           alt={product.name}
-          className="h-full w-full object-cover"
+          fill
+          unoptimized
+          className="object-cover"
         />
       </div>
       <div className="p-4">
         <h3 className="font-medium">{product.name}</h3>
+        <p>{Math.round(score * 100)}% match</p>
         <p className="mt-1 text-sm text-gray-500">{product.category}</p>
         <p className="mt-2 text-sm text-gray-600 line-clamp-2">{product.description}</p>
         <div className="mt-3 flex gap-2">
-          <Button variant="ghost" onClick={() => onFeedback(product.id, "like")}>
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => {
+              void onFeedback(product.id, "like");
+            }}
+          >
             More like this
           </Button>
-          <Button variant="ghost" onClick={() => onFeedback(product.id, "dislike")}>
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => {
+              void onFeedback(product.id, "dislike");
+            }}
+          >
             Not for me
           </Button>
         </div>
@@ -78,15 +96,16 @@ export function ProductCard({ product, onFeedback }: ProductCardProps) {
 ```tsx
 interface ChatPanelProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string) => Promise<void> | void;
   isStreaming: boolean;
+  error: string | null;
 }
 ```
 
 `src/components/chat/ChatInput.tsx:6-9`:
 ```tsx
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string) => Promise<void> | void;
   disabled: boolean;
 }
 ```
@@ -95,8 +114,10 @@ interface ChatInputProps {
 ```tsx
 interface RecommendationGridProps {
   products: Recommendation[];
-  onFeedback: (productId: string, signal: "like" | "dislike") => void;
+  onFeedback: (productId: string, signal: "like" | "dislike") => Promise<void> | void;
   isLoading: boolean;
+  isFeedbackPending: boolean;
+  error: string | null;
 }
 ```
 
@@ -119,9 +140,16 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost";
 }
 
-export function Button({ variant = "primary", className, children, ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  className,
+  children,
+  type,
+  ...props
+}: ButtonProps) {
   return (
     <button
+      type={type ?? "button"}
       className={cn(
         "rounded-lg px-4 py-2 font-medium transition-colors disabled:opacity-50",
         variant === "primary" && "bg-gray-900 text-white hover:bg-gray-800",
@@ -140,6 +168,7 @@ export function Button({ variant = "primary", className, children, ...props }: B
 Key patterns:
 - Extend `ButtonHTMLAttributes` so all native button props pass through
 - Variant as string union with default value
+- Shared button primitives should default to `type="button"` so non-form actions never accidentally submit the nearest form
 - Accept optional `className` for consumer overrides
 - Spread `...props` to forward native attributes
 - `cn()` merges base, variant, and override classes without conflicts
@@ -152,6 +181,7 @@ Key patterns:
 - Use `cn()` helper (from `clsx` + `tailwind-merge`) for conditional classes -- see `src/lib/utils.ts`
 - No CSS modules or styled-components
 - Responsive: desktop-first (the discovery UI is desktop-only for MVP)
+- Prefer `next/image` for catalog cards, but if the source is a remote SVG placeholder service such as `placehold.co`, add `unoptimized` or use a plain `<img>` to avoid Next image optimizer SVG blocking in development/runtime
 
 **Conditional class example** from `src/components/chat/MessageBubble.tsx:11-17`:
 ```tsx
@@ -207,6 +237,7 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 
 - Interactive elements must be `<button>` or `<a>`, not `<div onClick>`
 - Images require `alt` text (see `ProductCard.tsx:18`)
+- Recommendation feedback buttons should remain explicit `type="button"` controls even when rendered near form-based chat inputs
 - Form inputs require associated labels or descriptive placeholders (see `ChatInput.tsx:30`)
 - Focus management for the chat input after message send
 - `ChatInput` uses a `<form>` with `onSubmit` so Enter key works natively (`ChatInput.tsx:14`)
@@ -220,6 +251,8 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 - **Don't create wrapper components that just pass props through** -- compose directly
 - **Don't forget `"use client"` directive** -- required for any component using hooks, state, or event handlers (all chat/ and recommendation/ components need it)
 - **Don't use `export default`** for components -- use named exports. Page components are the exception.
+- **Don't assume remote placeholder images are safe for `next/image` optimization** -- browser testing showed `placehold.co` SVG placeholders fail unless the component opts out with `unoptimized`
+- **Don't rely on the browser default `<button>` type** -- shared buttons used for feedback actions should default to `button`, not `submit`
 
 ---
 

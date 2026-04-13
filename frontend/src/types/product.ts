@@ -13,7 +13,9 @@ export const ProductSchema = z.object({
 
 export type Product = z.infer<typeof ProductSchema>;
 
-export interface Recommendation {
-  product: Product;
-  score: number;
-}
+export const RecommendationSchema = z.object({
+  product: ProductSchema,
+  score: z.number(),
+});
+
+export type Recommendation = z.infer<typeof RecommendationSchema>;

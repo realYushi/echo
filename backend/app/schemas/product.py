@@ -37,4 +37,4 @@ class RecommendRequest(CamelModel):
     """Request body for the recommend endpoint."""
 
     session_id: str
-    persona_embedding: list[float]
+    persona_embedding: list[float] | None = None

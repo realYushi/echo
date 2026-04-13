@@ -11,13 +11,18 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[80%] rounded-2xl px-4 py-3",
+          "max-w-[85%] rounded-[24px] border px-4 py-3 shadow-[0_18px_32px_rgba(29,42,34,0.06)]",
           isUser
-            ? "bg-gray-900 text-white"
-            : "bg-gray-100 text-gray-900",
+            ? "border-transparent bg-[color:var(--accent)] text-white"
+            : "border-[color:var(--line)] bg-[color:var(--panel)] text-[color:var(--ink)]",
         )}
       >
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        <p className="mb-2 text-[11px] tracking-[0.18em] text-current/60 uppercase">
+          {isUser ? "You" : "Echo"}
+        </p>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+          {message.content}
+        </p>
       </div>
     </div>
   );

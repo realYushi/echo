@@ -34,9 +34,11 @@ Types mirror the backend Pydantic schemas. Keep them in sync manually for MVP; s
 ### Message and Chat types (`src/types/chat.ts`)
 
 ```tsx
-import type { Persona } from "./persona";
+import { z } from "zod";
+import { PersonaSchema, type Persona } from "./persona";
 
 export interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -47,28 +49,37 @@ export interface ChatRequest {
   persona: Persona | null;
 }
 
-export type ChatEvent =
-  | { type: "token"; content: string }
-  | { type: "persona_update"; persona: Persona }
-  | { type: "done" }
-  | { type: "error"; message: string };
+export const ChatEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("token"), content: z.string() }),
+  z.object({ type: z.literal("persona_update"), persona: PersonaSchema }),
+  z.object({ type: z.literal("done") }),
+  z.object({ type: z.literal("error"), message: z.string() }),
+]);
+
+export type ChatEvent = z.infer<typeof ChatEventSchema>;
 ```
 
 ### Persona types (`src/types/persona.ts`)
 
 ```tsx
-export interface Persona {
-  projectType: string | null;
-  budgetTier: string | null;
-  role: string | null;
-  stylePreferences: string[];
-  materialPreferences: string[];
-  categories: string[];
-  rejections: string[];
-  approvals: string[];
-}
+import { z } from "zod";
 
-export type FeedbackSignal = "like" | "dislike";
+export const PersonaSchema = z.object({
+  projectType: z.string().nullable(),
+  budgetTier: z.string().nullable(),
+  role: z.string().nullable(),
+  stylePreferences: z.array(z.string()),
+  materialPreferences: z.array(z.string()),
+  categories: z.array(z.string()),
+  rejections: z.array(z.string()),
+  approvals: z.array(z.string()),
+});
+
+export type Persona = z.infer<typeof PersonaSchema>;
+
+export const FeedbackSignalSchema = z.enum(["like", "dislike"]);
+
+export type FeedbackSignal = z.infer<typeof FeedbackSignalSchema>;
 
 export const EMPTY_PERSONA: Persona = {
   projectType: null,
@@ -100,10 +111,12 @@ export const ProductSchema = z.object({
 
 export type Product = z.infer<typeof ProductSchema>;
 
-export interface Recommendation {
-  product: Product;
-  score: number;
-}
+export const RecommendationSchema = z.object({
+  product: ProductSchema,
+  score: z.number(),
+});
+
+export type Recommendation = z.infer<typeof RecommendationSchema>;
 ```
 
 ---
@@ -118,10 +131,10 @@ Validate at the API client boundary (`lib/api.ts`), not inside components:
 
 ```tsx
 // In lib/api.ts — validate response data
-export async function fetchRecommendations(sessionId: string, personaEmbedding: number[]): Promise<Recommendation[]> {
+export async function fetchRecommendations(sessionId: string, personaEmbedding?: number[]): Promise<Recommendation[]> {
   const res = await fetch("/api/recommend", { ... });
   const data = await res.json();
-  return z.array(ProductSchema).parse(data.products);
+  return z.array(RecommendationSchema).parse(data);
 }
 ```
 
@@ -134,18 +147,20 @@ export async function fetchRecommendations(sessionId: string, personaEmbedding: 
 `ChatEvent` in `src/types/chat.ts:14-18` uses a discriminated union on the `type` field. This enables exhaustive switch matching and narrows the type inside each branch.
 
 ```tsx
-export type ChatEvent =
-  | { type: "token"; content: string }
-  | { type: "persona_update"; persona: Persona }
-  | { type: "done" }
-  | { type: "error"; message: string };
+export const ChatEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("token"), content: z.string() }),
+  z.object({ type: z.literal("persona_update"), persona: PersonaSchema }),
+  z.object({ type: z.literal("done") }),
+  z.object({ type: z.literal("error"), message: z.string() }),
+]);
 ```
 
 ### Literal types for constrained values
 
-`FeedbackSignal` in `src/types/persona.ts:12` uses a string literal union, not a plain `string`:
+`FeedbackSignal` in `src/types/persona.ts:16` uses a Zod enum plus inferred literal union, not a plain `string`:
 ```tsx
-export type FeedbackSignal = "like" | "dislike";
+export const FeedbackSignalSchema = z.enum(["like", "dislike"]);
+export type FeedbackSignal = z.infer<typeof FeedbackSignalSchema>;
 ```
 
 This is used in component props (`ProductCard.tsx:7`):
@@ -169,6 +184,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 ```
 
+Because `Button` extends native attributes, it should also normalize button semantics in the primitive itself:
+
+```tsx
+export function Button({ type, ...props }: ButtonProps) {
+  return <button type={type ?? "button"} {...props} />;
+}
+```
+
 ### Import type
 
 Use `import type` for type-only imports. This is enforced by convention throughout the codebase:
@@ -176,6 +199,20 @@ Use `import type` for type-only imports. This is enforced by convention througho
 import type { Message } from "@/types/chat";
 import type { Product } from "@/types/product";
 import type { Persona, FeedbackSignal } from "@/types/persona";
+```
+
+### Stable IDs for streamed message lists
+
+`Message` includes a stable `id` string so streamed assistant content can update the last bubble without using array indices as React keys:
+
+```tsx
+function createMessage(role: Message["role"], content: string): Message {
+  return {
+    id: crypto.randomUUID(),
+    role,
+    content,
+  };
+}
 ```
 
 ---

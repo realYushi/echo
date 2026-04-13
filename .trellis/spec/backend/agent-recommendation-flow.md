@@ -337,6 +337,7 @@ def save_session(session_id: str, state: AgentState) -> None
 
 All API-facing schemas inherit from `CamelModel` (`app/schemas/base.py`) which uses `alias_generator=to_camel` and `populate_by_name=True`. This means:
 - Incoming JSON uses camelCase keys (`sessionId`, `personaEmbedding`, `productId`)
+- `POST /api/recommend` accepts either an explicit `personaEmbedding` or a bare `sessionId` that resolves the embedding from the server session store
 - Outgoing JSON must use camelCase (`projectType`, `budgetTier`, `imageUrl`)
 - When serializing manually (SSE events, dict returns), use `model_dump(by_alias=True)`
 
@@ -372,7 +373,7 @@ export type ChatEvent =
 | Endpoint | Schema | Fields |
 |----------|--------|--------|
 | `POST /api/chat` | `ChatRequest` | `sessionId: str`, `message: str`, `persona: Persona \| None` |
-| `POST /api/recommend` | `RecommendRequest` | `sessionId: str`, `personaEmbedding: list[float]` |
+| `POST /api/recommend` | `RecommendRequest` | `sessionId: str`, `personaEmbedding: list[float] \| None = None` |
 | `POST /api/feedback` | `FeedbackRequest` | `productId: str`, `signal: "like" \| "dislike"`, `sessionId: str` |
 
 #### Response Contracts
@@ -380,7 +381,7 @@ export type ChatEvent =
 | Endpoint | Response |
 |----------|----------|
 | Chat | SSE stream (see above) |
-| Recommend | `Recommendation[]` with camelCase keys, or `[]` if embedding is empty |
+| Recommend | `Recommendation[]` with camelCase keys. Router uses `request.personaEmbedding` first, then falls back to session-backed `persona_embedding`, and returns `[]` if neither exists |
 | Feedback | `{"persona": <camelCase Persona>}` |
 
 #### Session Persistence
@@ -395,7 +396,8 @@ export type ChatEvent =
 | Condition | Expected Behavior | Boundary |
 |-----------|-------------------|----------|
 | Agent turn raises any exception | SSE emits `error` event + `done`, does not drop connection | Router (chat) |
-| Empty `personaEmbedding` in recommend request | Return `[]` (200) | Router (recommend) |
+| Empty `personaEmbedding` in recommend request and no session-backed embedding | Return `[]` (200) | Router (recommend) |
+| Empty `personaEmbedding` in recommend request but session has embedding | Reuse session-backed embedding and return recommendations | Router (recommend) |
 | `productId` not found in seed catalog | 404 `NotFoundError` via global handler | Router (feedback) |
 | No existing session for `sessionId` in chat | Start fresh (empty messages, null persona) | Router (chat) |
 | No existing session for `sessionId` in feedback | Use empty `Persona()`, skip session save | Router (feedback) |
@@ -424,6 +426,7 @@ export type ChatEvent =
 - `tests/test_recommend_router.py`
   - Assert empty embedding returns `[]`.
   - Assert valid embedding returns camelCase recommendation objects.
+  - Assert request body with only `sessionId` reuses the stored session embedding.
 - `tests/test_feedback_router.py`
   - Assert 404 for unknown product ID.
   - Assert returned persona contains product name in approvals/rejections.

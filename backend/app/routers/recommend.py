@@ -10,6 +10,7 @@ from app.config import Settings  # noqa: TC001 - FastAPI resolves annotations at
 from app.dependencies import get_qdrant_client, get_settings
 from app.schemas.product import RecommendRequest  # noqa: TC001 - FastAPI resolves annotations at runtime
 from app.services.recommendation import get_recommendations
+from app.services.session import get_session
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -21,12 +22,17 @@ async def recommend(
     settings: Annotated[Settings, Depends(get_settings)],
     qdrant_client: Annotated[AsyncQdrantClient, Depends(get_qdrant_client)],
 ) -> list[dict[str, object]]:
-    """Return product recommendations based on persona embedding."""
-    if not request.persona_embedding:
+    """Return product recommendations based on request or session persona embedding."""
+    persona_embedding = request.persona_embedding
+    if not persona_embedding:
+        session = get_session(request.session_id)
+        persona_embedding = session.get("persona_embedding", []) if session is not None else []
+
+    if not persona_embedding:
         return []
 
     results = await get_recommendations(
-        persona_embedding=request.persona_embedding,
+        persona_embedding=persona_embedding,
         qdrant_client=qdrant_client,
         collection=settings.qdrant_collection,
         limit=settings.recommendation_limit,

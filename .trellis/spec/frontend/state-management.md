@@ -34,39 +34,45 @@ import { useState } from "react";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
 import { useChat } from "@/hooks/useChat";
+import { usePersona } from "@/hooks/usePersona";
 import { useRecommendations } from "@/hooks/useRecommendations";
 
 export default function DiscoverPage() {
   const [sessionId] = useState(() => crypto.randomUUID());
-  const chat = useChat(sessionId);
+  const persona = usePersona(sessionId);
   const recommendations = useRecommendations(sessionId);
+  const chat = useChat(sessionId, {
+    persona: persona.persona,
+    onPersonaUpdate: persona.setPersona,
+    onTurnComplete: async () => {
+      await recommendations.refreshRecommendations();
+    },
+  });
 
   return (
-    <div className="flex h-screen">
-      <div className="flex w-1/2 flex-col border-r border-gray-200">
-        <ChatPanel
-          messages={chat.messages}
-          onSend={chat.sendMessage}
-          isStreaming={chat.isStreaming}
-        />
-      </div>
-      <div className="w-1/2 overflow-y-auto p-6">
-        <RecommendationGrid
-          products={recommendations.products}
-          onFeedback={() => {}}
-          isLoading={recommendations.isLoading}
-        />
-      </div>
-    </div>
+    <RecommendationGrid
+      products={recommendations.products}
+      onFeedback={async (productId, signal) => {
+        const updatedPersona = await persona.sendFeedback(productId, signal);
+        if (updatedPersona) {
+          await recommendations.refreshRecommendations();
+        }
+      }}
+      isLoading={recommendations.isLoading}
+      isFeedbackPending={persona.isSubmitting}
+      error={persona.error ?? recommendations.error}
+      emptyTitle="Your shortlist will appear here"
+      emptyDescription="Start the conversation on the left."
+    />
   );
 }
 ```
 
 Key details:
 - `sessionId` is created once via `useState(() => crypto.randomUUID())` -- the lazy initializer ensures it stays stable across re-renders
-- Each hook owns its slice of state (`chat` owns messages/streaming, `recommendations` owns products/loading)
+- Each hook owns its slice of state (`chat` owns messages/streaming, `persona` owns the taste profile, `recommendations` owns products/loading)
 - Data flows down via props: `chat.messages` -> `ChatPanel`, `recommendations.products` -> `RecommendationGrid`
-- The `onFeedback` callback is currently a no-op `() => {}` -- it will be wired to `usePersona.addSignal` in a later PR
+- The page coordinates cross-hook effects: chat turn completes -> refresh recommendations; feedback saves persona -> refresh recommendations
 
 ---
 
@@ -85,6 +91,7 @@ Introduce Zustand or Context only if:
 
 - Server is the source of truth for: persona, recommendations, chat history (via LangGraph checkpoints)
 - Client holds a local copy that updates via SSE stream and REST responses
+- Recommendation refreshes can use `sessionId` alone because the backend reuses the server-stored persona embedding for that session
 - On page refresh: re-fetch from server using session ID (checkpoint restore)
 - Don't cache server state in `localStorage` -- the backend checkpoint handles persistence
 

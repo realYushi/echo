@@ -1,6 +1,8 @@
-import type { Persona } from "./persona";
+import { z } from "zod";
+import { PersonaSchema, type Persona } from "./persona";
 
 export interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -11,8 +13,22 @@ export interface ChatRequest {
   persona: Persona | null;
 }
 
-export type ChatEvent =
-  | { type: "token"; content: string }
-  | { type: "persona_update"; persona: Persona }
-  | { type: "done" }
-  | { type: "error"; message: string };
+export const ChatEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("token"),
+    content: z.string(),
+  }),
+  z.object({
+    type: z.literal("persona_update"),
+    persona: PersonaSchema,
+  }),
+  z.object({
+    type: z.literal("done"),
+  }),
+  z.object({
+    type: z.literal("error"),
+    message: z.string(),
+  }),
+]);
+
+export type ChatEvent = z.infer<typeof ChatEventSchema>;

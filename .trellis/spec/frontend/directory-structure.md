@@ -32,21 +32,21 @@ frontend/
 │   │       ├── ProductCard.tsx     # Product display with feedback buttons
 │   │       └── EmptyState.tsx      # Shown when no recommendations match
 │   ├── hooks/
-│   │   ├── useChat.ts             # Chat message state + send (SSE stub)
-│   │   ├── usePersona.ts          # Persona state + feedback signal handling
-│   │   └── useRecommendations.ts  # Recommendation fetching (stub)
+│   │   ├── useChat.ts             # Chat message state + SSE streaming
+│   │   ├── usePersona.ts          # Persona state + feedback mutation handling
+│   │   └── useRecommendations.ts  # Session-backed recommendation refresh
 │   ├── lib/
 │   │   ├── utils.ts               # cn() helper (clsx + tailwind-merge)
-│   │   ├── api.ts                 # API client stubs (postChat, postFeedback, fetchRecommendations)
-│   │   └── sse.ts                 # SSE streaming helper (streamChat stub)
+│   │   ├── api.ts                 # Typed fetch clients (postChat, postFeedback, fetchRecommendations)
+│   │   └── sse.ts                 # SSE stream reader + event parser
 │   ├── types/
-│   │   ├── chat.ts                # Message, ChatRequest, ChatEvent (discriminated union)
-│   │   ├── persona.ts             # Persona, FeedbackSignal, EMPTY_PERSONA constant
-│   │   └── product.ts             # ProductSchema (Zod), Product (z.infer), Recommendation
+│   │   ├── chat.ts                # Message, ChatRequest, ChatEventSchema
+│   │   ├── persona.ts             # PersonaSchema, FeedbackSignalSchema, EMPTY_PERSONA
+│   │   └── product.ts             # ProductSchema, RecommendationSchema
 │   └── styles/
 │       └── globals.css            # Tailwind v4 import + body defaults
 ├── public/
-├── next.config.ts                 # API proxy rewrites to FastAPI backend
+├── next.config.ts                 # API proxy rewrites + remote image config
 ├── tsconfig.json                  # Strict mode, @/* path alias
 ├── eslint.config.mjs              # ESLint 9 flat config (next/core-web-vitals + next/typescript)
 ├── vitest.config.ts               # Vitest + jsdom + @/ alias
@@ -62,8 +62,8 @@ frontend/
 - **`app/`**: Next.js routes only. Minimal logic -- compose components and hooks. See `src/app/discover/page.tsx` for the pattern: `"use client"` directive, hook calls, layout JSX.
 - **`components/`**: Grouped by feature (`chat/`, `recommendations/`). Shared primitives in `ui/`. Every component uses named exports.
 - **`hooks/`**: Custom hooks. One hook per file. Named `use{Feature}.ts`. Each defines an explicit return interface (`UseChatReturn`, `UseRecommendationsReturn`, etc.).
-- **`lib/`**: Non-React utilities (API clients, helpers). No React imports. `utils.ts` is the exception-free utility; `api.ts` and `sse.ts` contain stub functions that throw `NotImplementedError` until wired.
-- **`types/`**: Shared TypeScript types. One file per domain object. Zod schemas live here alongside inferred types.
+- **`lib/`**: Non-React utilities (API clients, helpers). No React imports. `api.ts` owns fetch + Zod validation at the API boundary; `sse.ts` owns stream decoding and event parsing.
+- **`types/`**: Shared TypeScript types. One file per domain object. Zod schemas live here alongside inferred types, and chat messages include stable `id` fields for streamed rendering.
 
 New features: add components under a new feature folder in `components/`, add a hook in `hooks/`, add types in `types/`.
 
@@ -93,6 +93,10 @@ New features: add components under a new feature folder in `components/`, add a 
 
 **API proxy** (`next.config.ts:4-10`):
 ```ts
+images: {
+  remotePatterns: [{ protocol: "https", hostname: "placehold.co" }],
+},
+
 async rewrites() {
   return [
     {
@@ -131,4 +135,4 @@ Note: Tailwind v4 uses `@import "tailwindcss"` instead of the v3 `@tailwind base
 | Variant-based UI primitive | `src/components/ui/Button.tsx` |
 | Feature component group | `src/components/chat/` |
 | Domain types with Zod | `src/types/product.ts` |
-| API client stubs | `src/lib/api.ts` |
+| Typed API clients | `src/lib/api.ts` |
