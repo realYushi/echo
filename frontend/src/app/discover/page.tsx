@@ -1,23 +1,99 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
+import { Button } from "@/components/ui/Button";
 import { useChat } from "@/hooks/useChat";
 import { usePersona } from "@/hooks/usePersona";
 import { useRecommendations } from "@/hooks/useRecommendations";
+import { useSessionId } from "@/hooks/useSessionId";
+import { fetchSessionSnapshot } from "@/lib/api";
+import type { Message } from "@/types/chat";
+import { EMPTY_PERSONA } from "@/types/persona";
+
+function createHydratedMessageId(index: number, role: Message["role"]): string {
+  return `restored-${role}-${index}-${crypto.randomUUID()}`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getHydrationErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Unable to restore your last discovery session right now.";
+}
 
 export default function DiscoverPage() {
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const persona = usePersona(sessionId);
-  const recommendations = useRecommendations(sessionId);
-  const chat = useChat(sessionId, {
+  const { sessionId, isReady, startNewSession } = useSessionId();
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [hydrationError, setHydrationError] = useState<string | null>(null);
+  const resolvedSessionId = sessionId ?? "";
+
+  const persona = usePersona(resolvedSessionId);
+  const recommendations = useRecommendations(resolvedSessionId);
+  const chat = useChat(resolvedSessionId, {
     persona: persona.persona,
     onPersonaUpdate: persona.setPersona,
     onTurnComplete: async () => {
       await recommendations.refreshRecommendations();
     },
   });
+  const replaceMessages = chat.replaceMessages;
+  const setPersona = persona.setPersona;
+  const setRecommendations = recommendations.setRecommendations;
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsHydrating(true);
+    setHydrationError(null);
+
+    void fetchSessionSnapshot(sessionId, controller.signal)
+      .then((snapshot) => {
+        replaceMessages(
+          snapshot.messages.map((message, index) => ({
+            id: createHydratedMessageId(index, message.role),
+            role: message.role,
+            content: message.content,
+          })),
+        );
+        setPersona(snapshot.persona ?? EMPTY_PERSONA);
+        setRecommendations(snapshot.recommendations);
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) {
+          return;
+        }
+
+        replaceMessages([]);
+        setPersona(EMPTY_PERSONA);
+        setRecommendations([]);
+        setHydrationError(getHydrationErrorMessage(error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsHydrating(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    replaceMessages,
+    setPersona,
+    setRecommendations,
+    sessionId,
+  ]);
+
   const signalChips = [
     ...persona.persona.categories,
     ...persona.persona.stylePreferences,
@@ -52,11 +128,18 @@ export default function DiscoverPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs tracking-[0.16em] text-[color:var(--muted)] uppercase">
             <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-2">
-              Session {sessionId.slice(0, 8)}
+              Session {sessionId ? sessionId.slice(0, 8) : "loading"}
             </span>
             <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-2">
               {recommendations.products.length} live picks
             </span>
+            <Button
+              variant="secondary"
+              className="rounded-full border-[color:var(--line)] bg-white/80 px-3 py-2 text-[11px] tracking-[0.16em] uppercase"
+              onClick={startNewSession}
+            >
+              New session
+            </Button>
           </div>
         </div>
 
@@ -66,7 +149,11 @@ export default function DiscoverPage() {
               messages={chat.messages}
               onSend={chat.sendMessage}
               isStreaming={chat.isStreaming}
-              error={chat.error}
+              inputDisabled={!isReady || isHydrating || chat.isStreaming}
+              statusLabel={
+                !isReady ? "Loading" : isHydrating ? "Restoring" : undefined
+              }
+              error={chat.error ?? hydrationError}
             />
           </section>
 
@@ -136,9 +223,9 @@ export default function DiscoverPage() {
               <RecommendationGrid
                 products={recommendations.products}
                 onFeedback={handleFeedback}
-                isLoading={recommendations.isLoading}
+                isLoading={isHydrating || recommendations.isLoading}
                 isFeedbackPending={persona.isSubmitting}
-                error={persona.error ?? recommendations.error}
+                error={persona.error ?? recommendations.error ?? hydrationError}
                 emptyTitle={
                   hasConversation
                     ? "Keep shaping the direction"

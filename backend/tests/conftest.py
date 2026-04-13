@@ -1,6 +1,20 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
+
+from app.services.session import clear_sessions
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+
+@pytest.fixture(autouse=True)
+def reset_sessions() -> Generator[None, None, None]:
+    clear_sessions()
+    yield
+    clear_sessions()
 
 
 @pytest.fixture

@@ -10,6 +10,8 @@ interface ChatPanelProps {
   messages: Message[];
   onSend: (message: string) => Promise<void> | void;
   isStreaming: boolean;
+  inputDisabled?: boolean;
+  statusLabel?: string;
   error: string | null;
 }
 
@@ -17,6 +19,8 @@ export function ChatPanel({
   messages,
   onSend,
   isStreaming,
+  inputDisabled,
+  statusLabel,
   error,
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -49,7 +53,7 @@ export function ChatPanel({
                 : "border-[color:var(--line)] bg-white/80 text-[color:var(--muted)]",
             )}
           >
-            {isStreaming ? "Responding" : "Ready"}
+            {statusLabel ?? (isStreaming ? "Responding" : "Ready")}
           </span>
         </div>
       </div>
@@ -90,7 +94,7 @@ export function ChatPanel({
 
         <div ref={endRef} />
       </div>
-      <ChatInput onSend={onSend} disabled={isStreaming} />
+      <ChatInput onSend={onSend} disabled={inputDisabled ?? isStreaming} />
     </div>
   );
 }

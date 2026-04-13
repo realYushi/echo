@@ -6,6 +6,7 @@ import {
   type Persona,
 } from "@/types/persona";
 import { RecommendationSchema, type Recommendation } from "@/types/product";
+import { SessionSnapshotSchema, type SessionSnapshot } from "@/types/session";
 
 const ApiErrorSchema = z.object({
   error: z.object({
@@ -103,4 +104,21 @@ export async function fetchRecommendations(
 
   const data = await response.json();
   return z.array(RecommendationSchema).parse(data);
+}
+
+export async function fetchSessionSnapshot(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionSnapshot> {
+  const response = await fetch(`/api/sessions/${sessionId}`, {
+    method: "GET",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  const data = await response.json();
+  return SessionSnapshotSchema.parse(data);
 }

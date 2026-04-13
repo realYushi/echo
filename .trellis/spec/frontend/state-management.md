@@ -23,56 +23,72 @@ Lightweight state approach for MVP. React's built-in primitives (`useState`, `us
 
 ## State Coordination Pattern
 
-The `src/app/discover/page.tsx` is the state coordinator. It creates the session, calls the hooks, and passes data down to the two panels via props.
+The `src/app/discover/page.tsx` is the state coordinator. It restores or creates the session ID, hydrates server-backed state, calls the hooks, and passes data down to the two panels via props.
 
 **Actual implementation** from `src/app/discover/page.tsx`:
 
 ```tsx
 "use client";
 
-import { useState } from "react";
-import { ChatPanel } from "@/components/chat/ChatPanel";
-import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
+import { useEffect, useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { usePersona } from "@/hooks/usePersona";
 import { useRecommendations } from "@/hooks/useRecommendations";
+import { useSessionId } from "@/hooks/useSessionId";
+import { fetchSessionSnapshot } from "@/lib/api";
+import { EMPTY_PERSONA } from "@/types/persona";
 
 export default function DiscoverPage() {
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const persona = usePersona(sessionId);
-  const recommendations = useRecommendations(sessionId);
-  const chat = useChat(sessionId, {
+  const { sessionId } = useSessionId();
+  const [isHydrating, setIsHydrating] = useState(false);
+  const resolvedSessionId = sessionId ?? "";
+  const persona = usePersona(resolvedSessionId);
+  const recommendations = useRecommendations(resolvedSessionId);
+  const chat = useChat(resolvedSessionId, {
     persona: persona.persona,
     onPersonaUpdate: persona.setPersona,
     onTurnComplete: async () => {
       await recommendations.refreshRecommendations();
     },
   });
+  const replaceMessages = chat.replaceMessages;
+  const setPersona = persona.setPersona;
+  const setRecommendations = recommendations.setRecommendations;
 
-  return (
-    <RecommendationGrid
-      products={recommendations.products}
-      onFeedback={async (productId, signal) => {
-        const updatedPersona = await persona.sendFeedback(productId, signal);
-        if (updatedPersona) {
-          await recommendations.refreshRecommendations();
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsHydrating(true);
+
+    void fetchSessionSnapshot(sessionId, controller.signal)
+      .then((snapshot) => {
+        replaceMessages(/* map snapshot.messages -> Message[] */);
+        setPersona(snapshot.persona ?? EMPTY_PERSONA);
+        setRecommendations(snapshot.recommendations);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsHydrating(false);
         }
-      }}
-      isLoading={recommendations.isLoading}
-      isFeedbackPending={persona.isSubmitting}
-      error={persona.error ?? recommendations.error}
-      emptyTitle="Your shortlist will appear here"
-      emptyDescription="Start the conversation on the left."
-    />
-  );
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [replaceMessages, setPersona, setRecommendations, sessionId]);
 }
 ```
 
 Key details:
-- `sessionId` is created once via `useState(() => crypto.randomUUID())` -- the lazy initializer ensures it stays stable across re-renders
+- `useSessionId()` persists only the session identifier in `localStorage`; it must not persist messages, persona, or recommendations
+- Hydration fetches `GET /api/sessions/{sessionId}` on first load and after `startNewSession()` rotates to a fresh ID
 - Each hook owns its slice of state (`chat` owns messages/streaming, `persona` owns the taste profile, `recommendations` owns products/loading)
+- Hooks must clear their local state when `sessionId` changes so a newly generated session never shows stale restored data
 - Data flows down via props: `chat.messages` -> `ChatPanel`, `recommendations.products` -> `RecommendationGrid`
-- The page coordinates cross-hook effects: chat turn completes -> refresh recommendations; feedback saves persona -> refresh recommendations
+- The page coordinates cross-hook effects: snapshot restore seeds local state; chat turn completes -> refresh recommendations; feedback saves persona -> refresh recommendations
 
 ---
 
@@ -93,7 +109,8 @@ Introduce Zustand or Context only if:
 - Client holds a local copy that updates via SSE stream and REST responses
 - Recommendation refreshes can use `sessionId` alone because the backend reuses the server-stored persona embedding for that session
 - On page refresh: re-fetch from server using session ID (checkpoint restore)
-- Don't cache server state in `localStorage` -- the backend checkpoint handles persistence
+- Cache only the session identifier in `localStorage`; restore the actual workspace state from `/api/sessions/{sessionId}`
+- If snapshot hydration fails, reset local chat/persona/recommendation state and show a restore error instead of leaving mixed old state on screen
 
 ---
 
@@ -125,4 +142,5 @@ const filteredProducts = products.filter(...);
 | Feature state hook (chat) | `src/hooks/useChat.ts` |
 | Feature state hook (persona) | `src/hooks/usePersona.ts` |
 | Feature state hook (recommendations) | `src/hooks/useRecommendations.ts` |
+| Session ID persistence | `src/hooks/useSessionId.ts` |
 | Component-local state (input) | `src/components/chat/ChatInput.tsx` |

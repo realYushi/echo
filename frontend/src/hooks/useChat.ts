@@ -13,6 +13,7 @@ interface UseChatOptions {
 
 interface UseChatReturn {
   messages: Message[];
+  replaceMessages: (messages: Message[]) => void;
   sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
   error: string | null;
@@ -72,10 +73,22 @@ export function useChat(
     };
   }, []);
 
+  useEffect(() => {
+    abortControllerRef.current?.abort();
+    setMessages([]);
+    setIsStreaming(false);
+    setError(null);
+  }, [sessionId]);
+
+  const replaceMessages = useCallback((nextMessages: Message[]) => {
+    setError(null);
+    setMessages(nextMessages);
+  }, []);
+
   const sendMessage = useCallback(
     async (content: string) => {
       const trimmed = content.trim();
-      if (!trimmed || isStreaming) {
+      if (!sessionId || !trimmed || isStreaming) {
         return;
       }
 
@@ -149,5 +162,5 @@ export function useChat(
     [isStreaming, onPersonaUpdate, onTurnComplete, persona, sessionId],
   );
 
-  return { messages, sendMessage, isStreaming, error };
+  return { messages, replaceMessages, sendMessage, isStreaming, error };
 }

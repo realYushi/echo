@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchRecommendations } from "@/lib/api";
+import { fetchRecommendations, fetchSessionSnapshot } from "@/lib/api";
 
 describe("fetchRecommendations", () => {
   afterEach(() => {
@@ -39,6 +39,51 @@ describe("fetchRecommendations", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ sessionId: "session-pr5" }),
+      }),
+    );
+  });
+});
+
+describe("fetchSessionSnapshot", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("loads the stored discovery state for an existing session", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          sessionId: "session-pr6",
+          messages: [
+            { role: "user", content: "I want sculptural lighting." },
+            { role: "assistant", content: "What should I avoid?" },
+          ],
+          persona: {
+            projectType: null,
+            budgetTier: null,
+            role: null,
+            stylePreferences: ["sculptural"],
+            materialPreferences: [],
+            categories: ["lighting"],
+            rejections: ["glossy finishes"],
+            approvals: [],
+          },
+          recommendations: [],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const snapshot = await fetchSessionSnapshot("session-pr6");
+
+    expect(snapshot.messages).toHaveLength(2);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/sessions/session-pr6",
+      expect.objectContaining({
+        method: "GET",
       }),
     );
   });

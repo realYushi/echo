@@ -329,6 +329,28 @@ async def feedback(
 ```python
 def get_session(session_id: str) -> AgentState | None
 def save_session(session_id: str, state: AgentState) -> None
+def clear_sessions() -> None
+def get_session_snapshot(session_id: str) -> SessionSnapshot
+```
+
+#### Session Snapshot Endpoint
+
+```python
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: str) -> SessionSnapshot
+```
+
+```python
+class SessionMessage(CamelModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class SessionSnapshot(CamelModel):
+    session_id: str
+    messages: list[SessionMessage]
+    persona: Persona | None = None
+    recommendations: list[Recommendation]
 ```
 
 ### 3. Contracts
@@ -375,6 +397,7 @@ export type ChatEvent =
 | `POST /api/chat` | `ChatRequest` | `sessionId: str`, `message: str`, `persona: Persona \| None` |
 | `POST /api/recommend` | `RecommendRequest` | `sessionId: str`, `personaEmbedding: list[float] \| None = None` |
 | `POST /api/feedback` | `FeedbackRequest` | `productId: str`, `signal: "like" \| "dislike"`, `sessionId: str` |
+| `GET /api/sessions/{sessionId}` | path param only | returns `SessionSnapshot` |
 
 #### Response Contracts
 
@@ -383,12 +406,16 @@ export type ChatEvent =
 | Chat | SSE stream (see above) |
 | Recommend | `Recommendation[]` with camelCase keys. Router uses `request.personaEmbedding` first, then falls back to session-backed `persona_embedding`, and returns `[]` if neither exists |
 | Feedback | `{"persona": <camelCase Persona>}` |
+| Session snapshot | `{"sessionId", "messages", "persona", "recommendations"}` with camelCase keys |
 
 #### Session Persistence
 
 - In-memory dict keyed by `session_id` (`app/services/session.py`)
 - Chat endpoint loads previous state, appends user message, runs agent turn, saves result
 - Feedback endpoint loads session, updates persona + embedding, saves back
+- Session snapshot endpoint returns the current server-backed workspace state used by frontend hydration
+- Missing sessions must return an empty snapshot payload instead of 404: `messages=[]`, `persona=null`, `recommendations=[]`
+- Snapshot serialization must omit malformed message entries and only emit messages with `role in {"user", "assistant"}` plus string `content`
 - Process-local only -- does not survive restarts (same limitation as `InMemorySaver` checkpointer)
 
 ### 4. Validation & Error Matrix
@@ -401,6 +428,8 @@ export type ChatEvent =
 | `productId` not found in seed catalog | 404 `NotFoundError` via global handler | Router (feedback) |
 | No existing session for `sessionId` in chat | Start fresh (empty messages, null persona) | Router (chat) |
 | No existing session for `sessionId` in feedback | Use empty `Persona()`, skip session save | Router (feedback) |
+| No existing session for `sessionId` in snapshot endpoint | Return empty snapshot payload (200) | Router (session snapshot) |
+| Stored session contains malformed message entries | Omit invalid items from `messages`, do not fail the response | Service -> Router |
 
 ### 5. Good / Base / Bad Cases
 
@@ -430,6 +459,9 @@ export type ChatEvent =
 - `tests/test_feedback_router.py`
   - Assert 404 for unknown product ID.
   - Assert returned persona contains product name in approvals/rejections.
+- `tests/test_session_router.py`
+  - Assert saved session state is returned as camelCase `sessionId`, `messages`, `persona`, and `recommendations`.
+  - Assert missing sessions return an empty snapshot payload rather than 404.
 
 ### 7. Wrong vs Correct
 
@@ -468,3 +500,26 @@ yield _sse_event({"type": "persona_update", "persona": persona.model_dump()})
 
 ```python
 yield _sse_event({"type": "persona_update", "persona": persona.model_dump(by_alias=True)})
+```
+
+#### Wrong
+
+```python
+session = get_session(session_id)
+if session is None:
+    raise NotFoundError(f"Session {session_id} not found")
+```
+
+- Why wrong: discovery-page restore treats session fetch as hydration, not an exceptional path. Missing sessions must hydrate to an empty workspace.
+
+#### Correct
+
+```python
+if state is None:
+    return SessionSnapshot(
+        session_id=session_id,
+        messages=[],
+        persona=None,
+        recommendations=[],
+    )
+```

@@ -6,6 +6,7 @@ import type { Recommendation } from "@/types/product";
 
 interface UseRecommendationsReturn {
   products: Recommendation[];
+  setRecommendations: (products: Recommendation[]) => void;
   isLoading: boolean;
   error: string | null;
   refreshRecommendations: () => Promise<Recommendation[]>;
@@ -37,7 +38,23 @@ export function useRecommendations(
     };
   }, []);
 
+  useEffect(() => {
+    abortControllerRef.current?.abort();
+    setProducts([]);
+    setIsLoading(false);
+    setError(null);
+  }, [sessionId]);
+
+  const setRecommendations = useCallback((nextProducts: Recommendation[]) => {
+    setError(null);
+    setProducts(nextProducts);
+  }, []);
+
   const refreshRecommendations = useCallback(async () => {
+    if (!sessionId) {
+      return [];
+    }
+
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -67,5 +84,11 @@ export function useRecommendations(
     }
   }, [sessionId]);
 
-  return { products, isLoading, error, refreshRecommendations };
+  return {
+    products,
+    setRecommendations,
+    isLoading,
+    error,
+    refreshRecommendations,
+  };
 }

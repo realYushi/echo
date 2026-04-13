@@ -19,6 +19,7 @@ One hook per concern. Hooks return typed objects (not arrays). Every hook define
 ```tsx
 interface UseChatReturn {
   messages: Message[];
+  replaceMessages: (messages: Message[]) => void;
   sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
   error: string | null;
@@ -41,7 +42,7 @@ export function useChat(_sessionId: string, _options: UseChatOptions): UseChatRe
     // ... streaming logic
   }, []);
 
-  return { messages, sendMessage, isStreaming, error };
+  return { messages, replaceMessages, sendMessage, isStreaming, error };
 }
 ```
 
@@ -60,15 +61,17 @@ function useChat(sessionId: string) {
 ### useChat (`src/hooks/useChat.ts`)
 
 - **Params**: `sessionId: string`, `options: { persona, onPersonaUpdate, onTurnComplete? }`
-- **Returns**: `UseChatReturn { messages, sendMessage, isStreaming, error }`
+- **Returns**: `UseChatReturn { messages, replaceMessages, sendMessage, isStreaming, error }`
 - **Pattern**: Wraps `useState` + `useCallback`. Appends the user message optimistically, streams SSE events through `lib/sse.ts`, appends assistant content incrementally, and hands persona updates back to the page coordinator.
 - **Key detail**: Uses stable `Message.id` keys plus functional `setMessages((prev) => ...)` updates so streamed assistant content never closes over stale state.
+- **Session contract**: Reset local message/error/streaming state on `sessionId` changes, and expose `replaceMessages()` so the page coordinator can hydrate restored history from the backend snapshot.
 
 ### useRecommendations (`src/hooks/useRecommendations.ts`)
 
 - **Params**: `sessionId: string`
-- **Returns**: `UseRecommendationsReturn { products: Recommendation[], isLoading, error, refreshRecommendations }`
+- **Returns**: `UseRecommendationsReturn { products: Recommendation[], setRecommendations, isLoading, error, refreshRecommendations }`
 - **Pattern**: Owns the recommendation list, loading state, and refresh function. Calls `lib/api.ts` `fetchRecommendations()` with the `sessionId` and aborts in-flight refreshes on teardown or overlap.
+- **Session contract**: Clear products/loading/error on `sessionId` changes and expose `setRecommendations()` so snapshot hydration can seed the restored shortlist.
 
 ### usePersona (`src/hooks/usePersona.ts`)
 
@@ -76,13 +79,20 @@ function useChat(sessionId: string) {
 - **Returns**: `UsePersonaReturn { persona, setPersona, sendFeedback, isSubmitting, error }`
 - **Pattern**: Initializes with `EMPTY_PERSONA`, accepts persona snapshots from chat SSE, and sends feedback mutations through `postFeedback()`.
 - **Key detail**: `sendFeedback()` is async and returns the updated persona so the page coordinator can immediately trigger a recommendation refresh.
+- **Session contract**: Reset to `EMPTY_PERSONA` plus cleared error/submitting state whenever `sessionId` changes.
+
+### useSessionId (`src/hooks/useSessionId.ts`)
+
+- **Returns**: `UseSessionIdReturn { sessionId, isReady, startNewSession }`
+- **Pattern**: Persists a generated UUID in `localStorage` and exposes a `startNewSession()` helper that rotates the stored ID.
+- **Key detail**: This hook stores only the session identifier. It must never cache full persona, message, or recommendation payloads in browser storage.
 
 ---
 
 ## Data Fetching
 
 - **SSE streaming** (chat responses): `lib/sse.ts` exports `streamChat()` -- accepts a full `ChatRequest`, an `onEvent` callback typed as `(event: ChatEvent) => void`, and an optional `AbortSignal`
-- **REST calls** (recommendations, feedback): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`
+- **REST calls** (recommendations, feedback, restore): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`, `fetchSessionSnapshot()`
 - **No data fetching library for MVP** -- plain fetch is sufficient for 3 endpoints. Add React Query if complexity grows.
 
 **API client signatures** from `src/lib/api.ts`:
@@ -103,6 +113,11 @@ export async function fetchRecommendations(
   _personaEmbedding?: number[],
   _signal?: AbortSignal,
 ): Promise<Recommendation[]> { ... }
+
+export async function fetchSessionSnapshot(
+  _sessionId: string,
+  _signal?: AbortSignal,
+): Promise<SessionSnapshot> { ... }
 ```
 
 **SSE helper** from `src/lib/sse.ts`:
@@ -115,6 +130,7 @@ export async function streamChat(
 ```
 
 `fetchRecommendations()` may be called with only `sessionId`; the backend recommend router will reuse the session-backed persona embedding when the explicit embedding is omitted. Keep the client and backend session contract aligned.
+`fetchSessionSnapshot()` restores `messages`, `persona`, and `recommendations` for the stored session ID. Missing sessions resolve to an empty payload, not an exception status.
 
 ---
 
@@ -144,6 +160,7 @@ export async function streamChat(
 - **Don't forget to handle the SSE connection teardown** -- close `EventSource` / abort `ReadableStream` on unmount
 - **Don't close over stale state in callbacks** -- use functional `setState` or `useCallback` with proper deps
 - **Don't key streamed message lists by array index** -- attach a stable `Message.id` when messages are created
+- **Don't persist full server snapshots in `localStorage`** -- persist `sessionId`, then restore from the backend snapshot endpoint
 
 ---
 
@@ -154,5 +171,6 @@ export async function streamChat(
 | Hook with explicit return interface | `src/hooks/useChat.ts` |
 | Hook with EMPTY constant init | `src/hooks/usePersona.ts` |
 | Session-backed recommendation refresh | `src/hooks/useRecommendations.ts` |
+| Browser-persisted session ID | `src/hooks/useSessionId.ts` |
 | Typed API clients (fetch wrappers) | `src/lib/api.ts` |
 | SSE streaming helper | `src/lib/sse.ts` |

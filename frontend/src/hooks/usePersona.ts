@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { postFeedback } from "@/lib/api";
 import type { Persona, FeedbackSignal } from "@/types/persona";
 import { EMPTY_PERSONA } from "@/types/persona";
@@ -29,6 +29,12 @@ export function usePersona(sessionId: string): UsePersonaReturn {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setPersonaState(EMPTY_PERSONA);
+    setIsSubmitting(false);
+    setError(null);
+  }, [sessionId]);
+
   const setPersona = useCallback((nextPersona: Persona) => {
     setError(null);
     setPersonaState(nextPersona);
@@ -36,6 +42,10 @@ export function usePersona(sessionId: string): UsePersonaReturn {
 
   const sendFeedback = useCallback(
     async (productId: string, signal: FeedbackSignal) => {
+      if (!sessionId) {
+        return null;
+      }
+
       setIsSubmitting(true);
       setError(null);
 
