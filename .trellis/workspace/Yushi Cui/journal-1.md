@@ -240,3 +240,53 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: PR5 discovery UI
+
+**Date**: 2026-04-14
+**Task**: PR5 discovery UI
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Frontend UI | Implemented the split-pane discovery experience with refreshed landing page, styled discovery workspace, chat panel, recommendation grid, taste-profile summary, and empty/loading/error states |
+| Frontend data flow | Replaced stubs with real API and SSE wiring in `useChat`, `usePersona`, `useRecommendations`, `lib/api.ts`, and `lib/sse.ts` |
+| Cross-layer contract | Updated `POST /api/recommend` to accept bare `sessionId` and reuse the session-backed persona embedding when the client omits `personaEmbedding` |
+| Runtime fixes | Fixed remote placeholder image rendering by opting product cards out of Next image optimization and normalized shared button primitives to default to `type="button"` |
+| Tests | Added frontend tests for session-backed recommendation requests and product feedback callbacks, plus backend router coverage for session-backed recommend behavior |
+| Specs | Updated backend and frontend Trellis specs to reflect the implemented PR5 contracts, hook behavior, state coordination, image handling, and button semantics |
+
+**Verification**:
+- `frontend`: `npm run typecheck`, `npm run test -- --run`, `npm run lint`
+- `backend`: `pytest -q tests/test_persona.py tests/test_agent_graph.py tests/test_recommend_router.py`, `mypy app/routers/recommend.py app/schemas/product.py tests/test_recommend_router.py`
+- Browser validation with `agent-browser`: verified landing -> discover navigation, streaming chat, persona updates, recommendation refresh, image loading, and end-to-end feedback mutation path
+
+**Task Status**:
+- Recorded against `04-12-product-rec-mvp`
+- Task remains active because PR6 integration/polish work is still pending
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c4611f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
