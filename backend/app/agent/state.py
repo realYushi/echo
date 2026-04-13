@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import Literal, TypedDict
 
-if TYPE_CHECKING:
-    from app.schemas.persona import Persona
-    from app.schemas.product import Recommendation
+from app.schemas import persona as persona_schema  # noqa: TC001 - LangGraph resolves TypedDict annotations at runtime
+from app.schemas import product as product_schema  # noqa: TC001 - LangGraph resolves TypedDict annotations at runtime
+
+
+class PendingFeedback(TypedDict):
+    product_id: str
+    signal: Literal["like", "dislike"]
 
 
 class AgentState(TypedDict, total=False):
     messages: list[dict[str, str]]
-    persona: Persona | None
+    persona: persona_schema.Persona | None
     persona_embedding: list[float]
-    recommendations: list[Recommendation]
+    recommendations: list[product_schema.Recommendation]
     session_id: str
+    assistant_message: str
+    pending_feedback: PendingFeedback | None

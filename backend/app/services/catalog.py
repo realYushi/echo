@@ -13,6 +13,8 @@ from app.utils.embeddings import get_clip_embedding
 if TYPE_CHECKING:
     from qdrant_client import AsyncQdrantClient
 
+    from app.schemas.product import Product
+
 logger = structlog.get_logger(__name__)
 
 _VECTOR_SIZE = 512
@@ -21,6 +23,14 @@ _VECTOR_SIZE = 512
 def _product_id_to_uuid(product_id: str) -> str:
     """Deterministic UUID from a product ID string."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, product_id))
+
+
+def get_product(product_id: str) -> Product | None:
+    """Return a seeded product by ID."""
+    for product in SEED_PRODUCTS:
+        if product.id == product_id:
+            return product
+    return None
 
 
 async def seed_catalog(

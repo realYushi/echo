@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING, Annotated
 
+from anthropic import AsyncAnthropic
 from fastapi import Depends
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -44,3 +45,12 @@ async def get_qdrant_client(
 ) -> AsyncQdrantClient:
     """Return an async Qdrant client."""
     return AsyncQdrantClient(url=settings.qdrant_url)
+
+
+def get_anthropic_client(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AsyncAnthropic | None:
+    """Return an Anthropic client when an API key is configured."""
+    if not settings.anthropic_api_key:
+        return None
+    return AsyncAnthropic(api_key=settings.anthropic_api_key)

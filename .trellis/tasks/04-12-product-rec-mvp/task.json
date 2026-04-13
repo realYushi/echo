@@ -3,7 +3,7 @@
   "name": "product-rec-mvp",
   "title": "MVP: Product Recommendation via Guided Chatbot",
   "description": "Thin production stack MVP: Next.js + FastAPI + Qdrant + LangGraph. Elimination-first discovery loop with hybrid persona model.",
-  "status": "planning",
+  "status": "in-progress",
   "dev_type": "backend",
   "scope": "fullstack",
   "package": null,
@@ -39,11 +39,11 @@
   "subtasks": [
     {
       "name": "PR1: Scaffolding — Next.js + FastAPI + Qdrant + PostgreSQL",
-      "status": "pending"
+      "status": "done"
     },
     {
       "name": "PR2: Product catalog — dummy products + CLIP embeddings + Qdrant ingestion",
-      "status": "pending"
+      "status": "done"
     },
     {
       "name": "PR3: LangGraph agent — 6-node graph + persona extraction + embedding + retrieval",

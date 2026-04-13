@@ -41,3 +41,4 @@ htmlcov/
 !.trellis/
 !.claude/
 !.agents/
+.ace-tool/
