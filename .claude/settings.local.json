@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(rtk read:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(cmux-hub:*)",
+      "Bash(gh api:*)",
+      "Bash(curl -s https://raw.githubusercontent.com/drolosoft/cmux-resurrect/main/docs/auto-save.md)",
+      "Bash(launchctl load:*)",
+      "Bash(launchctl list:*)",
+      "Bash(cmux info:*)",
+      "Bash(cmux status:*)",
+      "Bash(launchctl unload:*)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && cat {}')",
+      "Bash(npm install:*)",
+      "Bash(kill 33479)",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill:*)",
+      "Bash(npx next:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001)",
+      "Bash(lsof -ti:3001)"
     ]
   }
 }

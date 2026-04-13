@@ -2,12 +2,12 @@
   "id": "product-rec-mvp",
   "name": "product-rec-mvp",
   "title": "MVP: Product Recommendation via Guided Chatbot",
-  "description": "",
+  "description": "Thin production stack MVP: Next.js + FastAPI + Qdrant + LangGraph. Elimination-first discovery loop with hybrid persona model.",
   "status": "planning",
-  "dev_type": null,
-  "scope": null,
+  "dev_type": "feature",
+  "scope": "fullstack",
   "package": null,
-  "priority": "P2",
+  "priority": "P1",
   "creator": "Yushi Cui",
   "assignee": "Yushi Cui",
   "createdAt": "2026-04-12",
@@ -15,39 +15,59 @@
   "branch": null,
   "base_branch": "main",
   "worktree_path": null,
-  "current_phase": 0,
+  "current_phase": 1,
   "next_action": [
     {
       "phase": 1,
-      "action": "brainstorm"
-    },
-    {
-      "phase": 2,
-      "action": "research"
-    },
-    {
-      "phase": 3,
       "action": "implement"
     },
     {
-      "phase": 4,
+      "phase": 2,
       "action": "check"
     },
     {
-      "phase": 5,
+      "phase": 3,
       "action": "update-spec"
     },
     {
-      "phase": 6,
+      "phase": 4,
       "action": "record-session"
     }
   ],
   "commit": null,
   "pr_url": null,
-  "subtasks": [],
+  "subtasks": [
+    {
+      "name": "PR1: Scaffolding — Next.js + FastAPI + Qdrant + PostgreSQL",
+      "status": "pending"
+    },
+    {
+      "name": "PR2: Product catalog — dummy products + CLIP embeddings + Qdrant ingestion",
+      "status": "pending"
+    },
+    {
+      "name": "PR3: LangGraph agent — 6-node graph + persona extraction + embedding + retrieval",
+      "status": "pending"
+    },
+    {
+      "name": "PR4: API layer — SSE streaming + chat + recommend + feedback endpoints",
+      "status": "pending"
+    },
+    {
+      "name": "PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid",
+      "status": "pending"
+    },
+    {
+      "name": "PR6: Integration + polish — end-to-end wiring + session resume + error handling",
+      "status": "pending"
+    }
+  ],
   "children": [],
   "parent": null,
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    "plans/_bmad-output/planning-artifacts/prd.md",
+    "plans/_bmad-output/planning-artifacts/research/technical-ai-recommendation-engine-research-2026-04-12.md"
+  ],
+  "notes": "Brainstorm completed 2026-04-13. Decisions: thin production stack, hybrid persona (JSON + embedding), modular 6-node LangGraph, multimodal CLIP embeddings.",
   "meta": {}
 }
