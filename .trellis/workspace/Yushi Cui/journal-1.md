@@ -161,3 +161,82 @@ Updated 3 spec files: directory-structure.md (added app/data/), database-guideli
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: PR4: API layer — SSE chat, recommend, feedback endpoints
+
+**Date**: 2026-04-14
+**Task**: PR4: API layer — SSE chat, recommend, feedback endpoints
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+
+## Implemented
+
+| Component | Description |
+|-----------|-------------|
+| CamelModel base | `app/schemas/base.py` — shared Pydantic base with `alias_generator=to_camel` for camelCase API serialization |
+| Chat endpoint | `POST /api/chat` — SSE streaming via `run_agent_turn()`, emits `token`, `persona_update`, `done`, `error` events |
+| Recommend endpoint | `POST /api/recommend` — accepts `personaEmbedding`, queries Qdrant via `get_recommendations()`, returns camelCase JSON |
+| Feedback endpoint | `POST /api/feedback` — looks up product, calls `apply_feedback()`, re-embeds persona, updates session store |
+| Session store | `app/services/session.py` — in-memory dict for cross-turn agent state persistence |
+| Schema updates | `ChatRequest` (sessionId + message + persona), `RecommendRequest` (sessionId + personaEmbedding), `FeedbackRequest` (+sessionId) |
+
+## Key Learnings
+
+- FastAPI + `from __future__ import annotations` + `TYPE_CHECKING` = broken schema generation. Endpoint signature types must be imported at runtime with `# noqa: TC001/TC002`.
+- `model_dump(by_alias=True)` is required for manual serialization (SSE events, dict returns). FastAPI auto-serializes by alias for Pydantic response models.
+- SSE error handling is the one exception to "services raise, routers don't catch" — stream must always emit `done` event.
+
+## Files Changed
+
+- `backend/app/schemas/base.py` — new CamelModel base
+- `backend/app/schemas/chat.py` — updated ChatRequest (message + persona)
+- `backend/app/schemas/persona.py` — inherits CamelModel
+- `backend/app/schemas/product.py` — inherits CamelModel, added RecommendRequest + sessionId
+- `backend/app/services/session.py` — new in-memory session store
+- `backend/app/services/persona.py` — minor formatting
+- `backend/app/routers/chat.py` — real SSE streaming with DI
+- `backend/app/routers/recommend.py` — real Qdrant retrieval with DI
+- `backend/app/routers/feedback.py` — real feedback with DI + session update
+- `.trellis/spec/backend/agent-recommendation-flow.md` — API layer contract scenario
+- `.trellis/spec/backend/directory-structure.md` — updated layout + runtime import docs
+- `.trellis/spec/backend/error-handling.md` — SSE error pattern
+- `.trellis/spec/backend/quality-guidelines.md` — CamelModel + TC gotcha
+- `.trellis/spec/guides/cross-layer-thinking-guide.md` — camelCase + TYPE_CHECKING mistakes
+
+## Testing
+
+- ruff: 0 issues
+- mypy strict: 0 issues
+- pytest: 5/5 passing
+- Manual E2E: chat (2-turn session), recommend (6 results), feedback (like + dislike), error handling (404, empty embedding)
+
+## Next
+
+PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid + feedback buttons
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b1fd5ac` | (see git log) |
+| `53652d1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

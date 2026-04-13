@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 3
-- **Last Active**: 2026-04-13
+- **Total Sessions**: 4
+- **Last Active**: 2026-04-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~163 | Active |
+| `journal-1.md` | ~242 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 4 | 2026-04-14 | PR4: API layer — SSE chat, recommend, feedback endpoints | `b1fd5ac`, `53652d1` | `main` |
 | 3 | 2026-04-13 | PR3 review: LangGraph agent | `adde887` | `main` |
 | 2 | 2026-04-13 | Update backend specs with PR2 patterns | `92847b3` | `main` |
 | 1 | 2026-04-13 | PR2: Product catalog + CLIP embeddings + Qdrant ingestion | `29be10a` | `main` |
