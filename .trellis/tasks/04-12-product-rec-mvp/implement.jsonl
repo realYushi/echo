@@ -1,0 +1,11 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Qdrant collection creation and ingestion patterns"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "File placement for new catalog data and embedding code"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "asyncio.to_thread for sync CLIP calls, type hints, forbidden patterns"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "ExternalServiceError for CLIP/Qdrant failures"}
+{"file": ".trellis/tasks/04-12-product-rec-mvp/prd.md", "reason": "PRD with product schema and requirements"}
+{"file": "backend/app/schemas/product.py", "reason": "Existing Product schema to follow"}
+{"file": "backend/app/dependencies.py", "reason": "Qdrant client injection pattern"}
+{"file": "backend/app/config.py", "reason": "Settings with clip_model, qdrant_url, qdrant_collection"}
+{"file": "backend/app/main.py", "reason": "Lifespan context manager to wire seed_catalog"}

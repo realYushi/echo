@@ -7,10 +7,12 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from qdrant_client import AsyncQdrantClient
 
 from app.dependencies import get_settings
 from app.exceptions import AppError
 from app.routers import chat, feedback, recommend
+from app.services.catalog import seed_catalog
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -38,6 +40,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger = structlog.get_logger(__name__)
     await logger.ainfo("application_startup", debug=settings.debug)
+
+    # Seed product catalog into Qdrant
+    qdrant = AsyncQdrantClient(url=settings.qdrant_url)
+    try:
+        count = await seed_catalog(qdrant, settings.qdrant_collection)
+        await logger.ainfo("catalog_seeded", product_count=count)
+    finally:
+        await qdrant.close()
 
     yield
 

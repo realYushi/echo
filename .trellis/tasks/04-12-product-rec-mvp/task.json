@@ -4,7 +4,7 @@
   "title": "MVP: Product Recommendation via Guided Chatbot",
   "description": "Thin production stack MVP: Next.js + FastAPI + Qdrant + LangGraph. Elimination-first discovery loop with hybrid persona model.",
   "status": "planning",
-  "dev_type": "feature",
+  "dev_type": "backend",
   "scope": "fullstack",
   "package": null,
   "priority": "P1",
@@ -15,7 +15,7 @@
   "branch": null,
   "base_branch": "main",
   "worktree_path": null,
-  "current_phase": 1,
+  "current_phase": 2,
   "next_action": [
     {
       "phase": 1,
