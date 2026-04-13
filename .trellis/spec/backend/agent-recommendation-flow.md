@@ -277,3 +277,191 @@ async def extract_persona(
 - Makes failure behavior explicit and testable.
 
 **Consequence**: Recommendation quality may be lower without Anthropic, but the user flow should remain operable.
+
+---
+
+## Scenario: API Layer SSE And Endpoint Contracts
+
+### 1. Scope / Trigger
+
+- Trigger: Any change to `app/routers/*`, `app/schemas/*`, `app/services/session.py`, or SSE event format.
+- Trigger: Any change to the frontend `ChatEvent`, `ChatRequest`, `Persona`, `Product`, or `Recommendation` types.
+- Why this needs code-spec depth: the API layer is the cross-layer boundary between frontend (camelCase) and backend (snake_case). Drift in serialization, event format, or request shape silently breaks the discovery loop.
+
+### 2. Signatures
+
+#### Chat Endpoint
+
+```python
+@router.post("/chat")
+async def chat(
+    request: ChatRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    qdrant_client: Annotated[AsyncQdrantClient, Depends(get_qdrant_client)],
+    anthropic_client: Annotated[AsyncAnthropic | None, Depends(get_anthropic_client)],
+) -> StreamingResponse
+```
+
+#### Recommend Endpoint
+
+```python
+@router.post("/recommend")
+async def recommend(
+    request: RecommendRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    qdrant_client: Annotated[AsyncQdrantClient, Depends(get_qdrant_client)],
+) -> list[dict[str, object]]
+```
+
+#### Feedback Endpoint
+
+```python
+@router.post("/feedback")
+async def feedback(
+    request: FeedbackRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    qdrant_client: Annotated[AsyncQdrantClient, Depends(get_qdrant_client)],
+) -> dict[str, object]
+```
+
+#### Session Store
+
+```python
+def get_session(session_id: str) -> AgentState | None
+def save_session(session_id: str, state: AgentState) -> None
+```
+
+### 3. Contracts
+
+#### CamelCase Serialization
+
+All API-facing schemas inherit from `CamelModel` (`app/schemas/base.py`) which uses `alias_generator=to_camel` and `populate_by_name=True`. This means:
+- Incoming JSON uses camelCase keys (`sessionId`, `personaEmbedding`, `productId`)
+- Outgoing JSON must use camelCase (`projectType`, `budgetTier`, `imageUrl`)
+- When serializing manually (SSE events, dict returns), use `model_dump(by_alias=True)`
+
+#### SSE Event Format
+
+The chat endpoint streams `text/event-stream` with this exact format:
+
+```
+data: {"type": "token", "content": "<assistant message text>"}\n\n
+data: {"type": "persona_update", "persona": {<camelCase Persona>}}\n\n
+data: {"type": "done"}\n\n
+```
+
+On error:
+
+```
+data: {"type": "error", "message": "<user-facing message>"}\n\n
+data: {"type": "done"}\n\n
+```
+
+Frontend expects these types (from `frontend/src/types/chat.ts`):
+
+```typescript
+export type ChatEvent =
+  | { type: "token"; content: string }
+  | { type: "persona_update"; persona: Persona }
+  | { type: "done" }
+  | { type: "error"; message: string };
+```
+
+#### Request Schemas
+
+| Endpoint | Schema | Fields |
+|----------|--------|--------|
+| `POST /api/chat` | `ChatRequest` | `sessionId: str`, `message: str`, `persona: Persona \| None` |
+| `POST /api/recommend` | `RecommendRequest` | `sessionId: str`, `personaEmbedding: list[float]` |
+| `POST /api/feedback` | `FeedbackRequest` | `productId: str`, `signal: "like" \| "dislike"`, `sessionId: str` |
+
+#### Response Contracts
+
+| Endpoint | Response |
+|----------|----------|
+| Chat | SSE stream (see above) |
+| Recommend | `Recommendation[]` with camelCase keys, or `[]` if embedding is empty |
+| Feedback | `{"persona": <camelCase Persona>}` |
+
+#### Session Persistence
+
+- In-memory dict keyed by `session_id` (`app/services/session.py`)
+- Chat endpoint loads previous state, appends user message, runs agent turn, saves result
+- Feedback endpoint loads session, updates persona + embedding, saves back
+- Process-local only -- does not survive restarts (same limitation as `InMemorySaver` checkpointer)
+
+### 4. Validation & Error Matrix
+
+| Condition | Expected Behavior | Boundary |
+|-----------|-------------------|----------|
+| Agent turn raises any exception | SSE emits `error` event + `done`, does not drop connection | Router (chat) |
+| Empty `personaEmbedding` in recommend request | Return `[]` (200) | Router (recommend) |
+| `productId` not found in seed catalog | 404 `NotFoundError` via global handler | Router (feedback) |
+| No existing session for `sessionId` in chat | Start fresh (empty messages, null persona) | Router (chat) |
+| No existing session for `sessionId` in feedback | Use empty `Persona()`, skip session save | Router (feedback) |
+
+### 5. Good / Base / Bad Cases
+
+#### Good
+
+- User sends 2+ messages, persona accumulates signals, recommend returns 6 products, feedback updates persona and persists to session.
+
+#### Base
+
+- First message in a new session: agent greets, persona is mostly empty, recommendations return empty (insufficient signals).
+
+#### Bad
+
+- Claude API is down: chat falls back to heuristic discovery reply + heuristic persona, SSE stream still completes with `token` + `persona_update` + `done`.
+- Qdrant is down: recommend raises `ExternalServiceError`, chat catches it in SSE stream and emits `error` event.
+
+### 6. Tests Required
+
+- `tests/test_chat_router.py`
+  - Assert SSE stream contains `token`, `persona_update`, and `done` events for a valid message.
+  - Assert error event is emitted when agent turn fails.
+  - Assert session state persists across two sequential chat requests.
+- `tests/test_recommend_router.py`
+  - Assert empty embedding returns `[]`.
+  - Assert valid embedding returns camelCase recommendation objects.
+- `tests/test_feedback_router.py`
+  - Assert 404 for unknown product ID.
+  - Assert returned persona contains product name in approvals/rejections.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+if TYPE_CHECKING:
+    from app.schemas.chat import ChatRequest
+
+@router.post("/chat")
+async def chat(request: ChatRequest) -> StreamingResponse:
+    ...
+```
+
+- Why wrong: `from __future__ import annotations` defers evaluation. FastAPI + Pydantic resolve endpoint annotations at runtime for schema generation. Forward ref `ChatRequest` is not available, causing `PydanticUserError: not fully defined`.
+
+#### Correct
+
+```python
+from app.schemas.chat import ChatRequest  # noqa: TC001 - FastAPI resolves at runtime
+
+@router.post("/chat")
+async def chat(request: ChatRequest) -> StreamingResponse:
+    ...
+```
+
+#### Wrong
+
+```python
+yield _sse_event({"type": "persona_update", "persona": persona.model_dump()})
+```
+
+- Why wrong: `model_dump()` without `by_alias=True` emits snake_case keys (`project_type`), but the frontend expects camelCase (`projectType`).
+
+#### Correct
+
+```python
+yield _sse_event({"type": "persona_update", "persona": persona.model_dump(by_alias=True)})

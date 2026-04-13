@@ -68,6 +68,18 @@ For each boundary:
 
 **Good**: Each layer only knows its neighbors
 
+### Mistake 4: snake_case / camelCase Mismatch
+
+**Bad**: Returning backend snake_case directly to frontend, or manually renaming fields in each endpoint.
+
+**Good**: Use a shared `CamelModel` base class with `alias_generator=to_camel` + `populate_by_name=True`. All API-facing schemas inherit from it. Use `model_dump(by_alias=True)` for manual serialization (SSE events, dict returns). See `app/schemas/base.py`.
+
+### Mistake 5: TYPE_CHECKING vs Runtime at API Boundary
+
+**Bad**: Putting FastAPI endpoint signature types under `if TYPE_CHECKING:` when `from __future__ import annotations` is active. Pydantic + FastAPI resolve annotations at runtime for schema generation -- forward refs fail.
+
+**Good**: Import request body types, `Settings`, and DI client types at runtime in router files, with `# noqa: TC001` / `# noqa: TC002` to suppress ruff. See `app/routers/chat.py`.
+
 ---
 
 ## Checklist for Cross-Layer Features
@@ -77,11 +89,14 @@ Before implementation:
 - [ ] Identified all layer boundaries
 - [ ] Defined format at each boundary
 - [ ] Decided where validation happens
+- [ ] Confirmed snake_case/camelCase serialization strategy (CamelModel + `by_alias=True`)
+- [ ] Router endpoint signature types are imported at runtime (not under TYPE_CHECKING)
 
 After implementation:
 - [ ] Tested with edge cases (null, empty, invalid)
 - [ ] Verified error handling at each boundary
 - [ ] Checked data survives round-trip
+- [ ] Verified API responses use camelCase keys
 
 ---
 

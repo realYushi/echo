@@ -47,11 +47,11 @@
     },
     {
       "name": "PR3: LangGraph agent — 6-node graph + persona extraction + embedding + retrieval",
-      "status": "pending"
+      "status": "done"
     },
     {
       "name": "PR4: API layer — SSE streaming + chat + recommend + feedback endpoints",
-      "status": "pending"
+      "status": "in-progress"
     },
     {
       "name": "PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid",

@@ -29,7 +29,8 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── persona.py       # Persona extraction + embedding (extract_persona, embed_persona)
 │   │   ├── recommendation.py # Qdrant retrieval + scoring (get_recommendations)
-│   │   └── catalog.py       # Product catalog operations (seed_catalog)
+│   │   ├── catalog.py       # Product catalog operations (seed_catalog, get_product)
+│   │   └── session.py       # In-memory session store (get_session, save_session)
 │   ├── agent/
 │   │   ├── __init__.py
 │   │   ├── graph.py         # LangGraph 6-node agent definition (build_graph)
@@ -39,9 +40,10 @@ backend/
 │   │   └── __init__.py      # SQLAlchemy models (empty -- add models here when needed)
 │   ├── schemas/
 │   │   ├── __init__.py
-│   │   ├── chat.py          # Message, ChatRequest
+│   │   ├── base.py          # CamelModel base class (camelCase alias_generator)
+│   │   ├── chat.py          # ChatRequest
 │   │   ├── persona.py       # Persona
-│   │   └── product.py       # Product, Recommendation, FeedbackRequest
+│   │   └── product.py       # Product, Recommendation, FeedbackRequest, RecommendRequest
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── products.py      # Seed data (SEED_PRODUCTS list of Product instances)
@@ -141,6 +143,7 @@ Three shared dependencies, all using `Depends()`:
 - `get_settings()` -- cached with `@lru_cache(maxsize=1)`, returns `Settings`
 - `get_db_session()` -- yields `AsyncSession`, one per request
 - `get_qdrant_client()` -- returns `AsyncQdrantClient`
+- `get_anthropic_client()` -- returns `AsyncAnthropic | None` (None when API key is empty)
 
 ### `from __future__ import annotations`
 
@@ -150,19 +153,23 @@ Every Python file in the codebase starts with `from __future__ import annotation
 
 Runtime-unnecessary imports (used only for type hints) are placed under `if TYPE_CHECKING:` blocks. This is the standard pattern across all files.
 
+**Exception -- FastAPI endpoint signatures**: Types used in `@router` endpoint function signatures (request body, `Annotated[..., Depends(...)]` parameters) must be imported at runtime because FastAPI + Pydantic resolve annotations at runtime for schema generation. Use `# noqa: TC001` or `# noqa: TC002` to suppress the ruff lint rule.
+
 ```python
-# app/routers/chat.py:1-11
+# app/routers/chat.py -- correct pattern for router files
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from anthropic import AsyncAnthropic  # noqa: TC002 - FastAPI resolves at runtime
+from fastapi import APIRouter, Depends
+from qdrant_client import AsyncQdrantClient  # noqa: TC002 - FastAPI resolves at runtime
+
+from app.config import Settings  # noqa: TC001 - FastAPI resolves at runtime
+from app.schemas.chat import ChatRequest  # noqa: TC001 - FastAPI resolves at runtime
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
-    from app.schemas.chat import ChatRequest
+    from collections.abc import AsyncGenerator  # OK under TYPE_CHECKING -- not in endpoint signature
 ```
 
 ---
@@ -175,10 +182,13 @@ if TYPE_CHECKING:
 | Pydantic settings with env file | `app/config.py` |
 | Dependency injection (lru_cache, async generator) | `app/dependencies.py` |
 | Exception hierarchy | `app/exceptions.py` |
-| Router with SSE streaming | `app/routers/chat.py` |
-| Router with schema input/output | `app/routers/recommend.py` |
+| Router with SSE streaming + DI | `app/routers/chat.py` |
+| Router with schema input/output + DI | `app/routers/recommend.py` |
+| Router with error propagation + DI | `app/routers/feedback.py` |
+| CamelModel base for API serialization | `app/schemas/base.py` |
 | Pydantic schema with Optional fields | `app/schemas/persona.py` |
 | Pydantic schema with Literal type | `app/schemas/product.py` |
+| In-memory session store | `app/services/session.py` |
 | AgentState TypedDict | `app/agent/state.py` |
 | LangGraph node signatures | `app/agent/nodes.py` |
 | Async Alembic env | `alembic/env.py` |

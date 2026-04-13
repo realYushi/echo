@@ -121,6 +121,19 @@ async def chat(request: ChatRequest) -> StreamingResponse:
 
 The chat endpoint must remain usable if Claude is down. Catch `ExternalServiceError` in the SSE streaming loop and send a fallback message to the client instead of dropping the connection.
 
+```python
+# app/routers/chat.py -- SSE error handling pattern
+try:
+    result = await run_agent_turn(state, ...)
+except Exception as exc:
+    await logger.aerror("chat_agent_turn_failed", session_id=session_id, error=str(exc))
+    yield _sse_event({"type": "error", "message": "Something went wrong. Please try again."})
+    yield _sse_event({"type": "done"})
+    return
+```
+
+This is the one approved exception to the "services raise, routers don't catch" rule. The SSE stream must always terminate with a `done` event so the frontend can clean up.
+
 ### Never swallow exceptions silently
 
 ```python
@@ -155,4 +168,5 @@ except Exception:
 |---------|------|
 | Full exception hierarchy | `app/exceptions.py` |
 | Global error handler registration | `app/main.py:63-68` |
-| Router that lets errors propagate | `app/routers/chat.py` |
+| Router that lets errors propagate | `app/routers/feedback.py` |
+| SSE error handling (catch + emit error event) | `app/routers/chat.py` |

@@ -1,5 +1,5 @@
 {"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
 {"file": ".claude/commands/trellis/check.md", "reason": "Code quality check spec"}
-{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Qdrant patterns to verify"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality standards to check against"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error handling patterns to verify"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify SSE error handling"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify code quality"}
+{"file": ".trellis/spec/backend/agent-recommendation-flow.md", "reason": "Verify agent contracts"}

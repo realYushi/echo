@@ -22,6 +22,7 @@ Python type hints are mandatory. Ruff for linting and formatting. Pytest for tes
 | Global mutable state | Hard to test, race conditions | Inject via FastAPI dependencies |
 | Missing `from __future__ import annotations` | Inconsistent with codebase convention | Add as first import in every file |
 | Runtime imports used only for type hints | Unnecessary runtime cost | Put under `if TYPE_CHECKING:` block |
+| Endpoint signature types under `TYPE_CHECKING` | FastAPI + Pydantic can't resolve forward refs for schema generation | Import at runtime with `# noqa: TC001` / `# noqa: TC002` |
 
 ---
 
@@ -34,7 +35,8 @@ Python type hints are mandatory. Ruff for linting and formatting. Pytest for tes
 - **`pydantic-settings`** for configuration, not raw `os.getenv` (see `app/config.py`)
 - **Async** for all I/O-bound operations (DB, HTTP, Qdrant)
 - **Dependency injection** via FastAPI's `Depends()` for DB sessions, clients, settings (see `app/dependencies.py`)
-- **`TYPE_CHECKING` guards** for imports used only in type hints (see `app/routers/chat.py`, `app/services/persona.py`)
+- **`TYPE_CHECKING` guards** for imports used only in type hints (see `app/services/persona.py`)
+- **Exception**: Imports used in FastAPI endpoint signatures (request body types, `Annotated[..., Depends()]` types) must be at runtime with `# noqa: TC001` / `# noqa: TC002` (see `app/routers/chat.py`)
 - **`Annotated` types** for dependency injection parameters (see `app/dependencies.py:33-34`)
 
 ### Actual Code Examples
@@ -97,7 +99,7 @@ Pydantic schema with Optional fields (`app/schemas/persona.py`):
 
 ```python
 # app/schemas/persona.py:6-16
-class Persona(BaseModel):
+class Persona(CamelModel):
     """User taste persona extracted from conversation signals."""
 
     project_type: str | None = None
@@ -109,6 +111,24 @@ class Persona(BaseModel):
     rejections: list[str] = []
     approvals: list[str] = []
 ```
+
+CamelModel base for API boundary serialization (`app/schemas/base.py`):
+
+```python
+# app/schemas/base.py:1-14
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+
+class CamelModel(BaseModel):
+    """Base model that accepts and emits camelCase at the API boundary."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+    )
+```
+
+All API-facing schemas inherit from `CamelModel`. Use `model_dump(by_alias=True)` when serializing responses manually (e.g., inside SSE events or dict returns). FastAPI auto-serializes by alias for Pydantic response models.
 
 Thread-safe lazy singleton for heavy models (`app/utils/embeddings.py`):
 
@@ -158,21 +178,22 @@ class AgentState(TypedDict, total=False):
     session_id: str
 ```
 
-Router pattern -- thin handler, SSE streaming (`app/routers/chat.py`):
+Router pattern -- thin handler with DI and SSE streaming (`app/routers/chat.py`):
 
 ```python
-# app/routers/chat.py:13-27
+# app/routers/chat.py:81-92
 router = APIRouter()
 
-async def _placeholder_stream() -> AsyncGenerator[str, None]:
-    """Placeholder SSE stream."""
-    yield 'data: {"message": "Chat endpoint stub -- not yet implemented"}\n\n'
-
 @router.post("/chat")
-async def chat(request: ChatRequest) -> StreamingResponse:
-    """Stream chat responses via SSE. Stub implementation."""
+async def chat(
+    request: ChatRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    qdrant_client: Annotated[AsyncQdrantClient, Depends(get_qdrant_client)],
+    anthropic_client: Annotated[AsyncAnthropic | None, Depends(get_anthropic_client)],
+) -> StreamingResponse:
+    """Stream chat responses via SSE."""
     return StreamingResponse(
-        _placeholder_stream(),
+        _chat_stream(request, settings, qdrant_client, anthropic_client),
         media_type="text/event-stream",
     )
 ```
