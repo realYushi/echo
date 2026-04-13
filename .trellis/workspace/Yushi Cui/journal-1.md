@@ -290,3 +290,47 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: PR6 session resume and integration polish
+
+**Date**: 2026-04-14
+**Task**: PR6 session resume and integration polish
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Backend session restore | Added `GET /api/sessions/{sessionId}` snapshot support with camelCase payloads for messages, persona, and recommendations |
+| Frontend hydration | Persisted only `sessionId` in the browser, hydrated the discovery workspace from the backend snapshot on load/refresh, and added a `New session` reset path |
+| Hook contracts | Extended `useChat` and `useRecommendations` with restore helpers and reset behavior on `sessionId` changes; reset persona state on new sessions |
+| Verification | Passed backend `ruff`, `pytest`, `mypy` and frontend `vitest`, `typecheck`, `lint`; browser-tested session restore and feedback wiring |
+| Code-spec updates | Updated backend and frontend Trellis specs for session snapshot, hydration, and restore/reset contracts |
+
+**Notes**:
+- Commit `f2ffd25` is the user code commit for PR6.
+- Browser testing confirmed refresh-based resume and new-session reset; feedback requests were also verified.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f2ffd25` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

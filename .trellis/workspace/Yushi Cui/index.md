@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-04-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~292 | Active |
+| `journal-1.md` | ~336 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-04-14 | PR6 session resume and integration polish | `f2ffd25` | `main` |
 | 5 | 2026-04-14 | PR5 discovery UI | `5c4611f` | `main` |
 | 4 | 2026-04-14 | PR4: API layer — SSE chat, recommend, feedback endpoints | `b1fd5ac`, `53652d1` | `main` |
 | 3 | 2026-04-13 | PR3 review: LangGraph agent | `adde887` | `main` |
