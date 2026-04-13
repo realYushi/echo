@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from app.schemas.base import CamelModel
 
 
-class Persona(BaseModel):
+class Persona(CamelModel):
     """User taste persona extracted from conversation signals."""
 
     project_type: str | None = None

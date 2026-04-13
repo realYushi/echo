@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from app.schemas.base import CamelModel
+from app.schemas.persona import Persona  # noqa: TC001 - Pydantic resolves field types at runtime
 
 
-class Message(BaseModel):
-    """A single chat message."""
-
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
+class ChatRequest(CamelModel):
     """Request body for the chat endpoint."""
 
-    messages: list[Message]
     session_id: str
+    message: str
+    persona: Persona | None = None

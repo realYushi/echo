@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from app.schemas.product import Product
 from app.utils.embeddings import get_clip_embedding
 
 if TYPE_CHECKING:
@@ -197,11 +196,7 @@ def _conversation_transcript(messages: list[dict[str, str]]) -> str:
 def _heuristic_persona(messages: list[dict[str, str]]) -> Persona:
     from app.schemas.persona import Persona
 
-    user_text = " ".join(
-        message.get("content", "")
-        for message in messages
-        if message.get("role") == "user"
-    ).lower()
+    user_text = " ".join(message.get("content", "") for message in messages if message.get("role") == "user").lower()
 
     persona = Persona(
         project_type=_extract_first_mapping(user_text, _PROJECT_KEYWORDS),
