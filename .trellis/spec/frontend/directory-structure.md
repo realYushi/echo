@@ -16,49 +16,54 @@ Next.js App Router with TypeScript. Code lives in `frontend/` at the project roo
 frontend/
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx           # Root layout
-│   │   ├── page.tsx             # Landing / entry point
+│   │   ├── layout.tsx              # Root layout (metadata, global CSS import)
+│   │   ├── page.tsx                # Landing page with "Discover" CTA
 │   │   └── discover/
-│   │       └── page.tsx         # Split-pane discovery view
+│   │       └── page.tsx            # Split-pane discovery view ("use client")
 │   ├── components/
-│   │   ├── ui/                  # Reusable primitives (Button, Card, Input)
+│   │   ├── ui/
+│   │   │   └── Button.tsx          # Variant-based button primitive
 │   │   ├── chat/
-│   │   │   ├── ChatPanel.tsx    # Chat container (message list + input)
-│   │   │   ├── MessageBubble.tsx
-│   │   │   └── ChatInput.tsx
+│   │   │   ├── ChatPanel.tsx       # Chat container (message list + input)
+│   │   │   ├── MessageBubble.tsx   # Single message display (user/assistant)
+│   │   │   └── ChatInput.tsx       # Text input + send button
 │   │   └── recommendations/
-│   │       ├── RecommendationGrid.tsx
-│   │       ├── ProductCard.tsx
-│   │       └── EmptyState.tsx
+│   │       ├── RecommendationGrid.tsx  # Grid with loading/empty/populated states
+│   │       ├── ProductCard.tsx     # Product display with feedback buttons
+│   │       └── EmptyState.tsx      # Shown when no recommendations match
 │   ├── hooks/
-│   │   ├── useChat.ts           # Chat SSE streaming
-│   │   ├── usePersona.ts        # Persona state
-│   │   └── useRecommendations.ts
+│   │   ├── useChat.ts             # Chat message state + send (SSE stub)
+│   │   ├── usePersona.ts          # Persona state + feedback signal handling
+│   │   └── useRecommendations.ts  # Recommendation fetching (stub)
 │   ├── lib/
-│   │   ├── api.ts               # API client (fetch wrappers)
-│   │   └── sse.ts               # SSE connection helper
+│   │   ├── utils.ts               # cn() helper (clsx + tailwind-merge)
+│   │   ├── api.ts                 # API client stubs (postChat, postFeedback, fetchRecommendations)
+│   │   └── sse.ts                 # SSE streaming helper (streamChat stub)
 │   ├── types/
-│   │   ├── chat.ts              # Chat message types
-│   │   ├── persona.ts           # Persona schema
-│   │   └── product.ts           # Product schema
+│   │   ├── chat.ts                # Message, ChatRequest, ChatEvent (discriminated union)
+│   │   ├── persona.ts             # Persona, FeedbackSignal, EMPTY_PERSONA constant
+│   │   └── product.ts             # ProductSchema (Zod), Product (z.infer), Recommendation
 │   └── styles/
-│       └── globals.css
+│       └── globals.css            # Tailwind v4 import + body defaults
 ├── public/
-├── next.config.ts
-├── tsconfig.json
-├── tailwind.config.ts
-└── package.json
+├── next.config.ts                 # API proxy rewrites to FastAPI backend
+├── tsconfig.json                  # Strict mode, @/* path alias
+├── eslint.config.mjs              # ESLint 9 flat config (next/core-web-vitals + next/typescript)
+├── vitest.config.ts               # Vitest + jsdom + @/ alias
+├── postcss.config.mjs             # Tailwind v4 via @tailwindcss/postcss plugin
+├── .prettierrc                    # Semi, double quotes, trailing commas, tailwind plugin
+└── package.json                   # Scripts: dev, build, lint, test, typecheck
 ```
 
 ---
 
 ## Module Organization
 
-- **`app/`**: Next.js routes only. Minimal logic — compose components and hooks.
-- **`components/`**: Grouped by feature (`chat/`, `recommendations/`). Shared primitives in `ui/`.
-- **`hooks/`**: Custom hooks. One hook per file. Named `use{Feature}.ts`.
-- **`lib/`**: Non-React utilities (API clients, helpers). No React imports.
-- **`types/`**: Shared TypeScript types. One file per domain object.
+- **`app/`**: Next.js routes only. Minimal logic -- compose components and hooks. See `src/app/discover/page.tsx` for the pattern: `"use client"` directive, hook calls, layout JSX.
+- **`components/`**: Grouped by feature (`chat/`, `recommendations/`). Shared primitives in `ui/`. Every component uses named exports.
+- **`hooks/`**: Custom hooks. One hook per file. Named `use{Feature}.ts`. Each defines an explicit return interface (`UseChatReturn`, `UseRecommendationsReturn`, etc.).
+- **`lib/`**: Non-React utilities (API clients, helpers). No React imports. `utils.ts` is the exception-free utility; `api.ts` and `sse.ts` contain stub functions that throw `NotImplementedError` until wired.
+- **`types/`**: Shared TypeScript types. One file per domain object. Zod schemas live here alongside inferred types.
 
 New features: add components under a new feature folder in `components/`, add a hook in `hooks/`, add types in `types/`.
 
@@ -70,13 +75,60 @@ New features: add components under a new feature folder in `components/`, add a 
 |---------|-----------|---------|
 | Components | `PascalCase.tsx` | `ProductCard.tsx` |
 | Hooks | `camelCase.ts` with `use` prefix | `useChat.ts` |
-| Utilities | `camelCase.ts` | `api.ts` |
+| Utilities | `camelCase.ts` | `api.ts`, `utils.ts` |
 | Types | `camelCase.ts` | `persona.ts` |
 | Directories | `kebab-case` or `camelCase` | `chat/`, `ui/` |
 | CSS classes | Tailwind utilities | No custom class names unless necessary |
 
 ---
 
+## Key Config Files
+
+**Path alias** (`tsconfig.json:21-23`):
+```json
+"paths": {
+  "@/*": ["./src/*"]
+}
+```
+
+**API proxy** (`next.config.ts:4-10`):
+```ts
+async rewrites() {
+  return [
+    {
+      source: "/api/:path*",
+      destination: "http://localhost:8000/api/:path*",
+    },
+  ];
+}
+```
+
+**Tailwind v4** (`postcss.config.mjs`):
+```js
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+```
+
+**Tailwind entry** (`src/styles/globals.css`):
+```css
+@import "tailwindcss";
+```
+
+Note: Tailwind v4 uses `@import "tailwindcss"` instead of the v3 `@tailwind base/components/utilities` directives. There is no `tailwind.config.ts` -- Tailwind v4 uses CSS-based configuration.
+
+---
+
 ## Examples
 
-Will be updated with links to actual files after PR5 frontend implementation.
+| What | File |
+|------|------|
+| Root layout with metadata and global CSS | `src/app/layout.tsx` |
+| Landing page with CTA link | `src/app/page.tsx` |
+| Split-pane state coordinator | `src/app/discover/page.tsx` |
+| Variant-based UI primitive | `src/components/ui/Button.tsx` |
+| Feature component group | `src/components/chat/` |
+| Domain types with Zod | `src/types/product.ts` |
+| API client stubs | `src/lib/api.ts` |

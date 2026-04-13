@@ -6,7 +6,7 @@
 
 ## Overview
 
-TypeScript strict mode. No `any` types. Shared types in `src/types/`. Zod for runtime validation of API responses.
+TypeScript strict mode (`tsconfig.json:8`). No `any` types. Shared types in `src/types/`. Zod for runtime validation of API responses.
 
 ---
 
@@ -14,22 +14,75 @@ TypeScript strict mode. No `any` types. Shared types in `src/types/`. Zod for ru
 
 - **`src/types/`**: Domain types shared across components and hooks. One file per domain.
 - **Component-local types**: `interface {Component}Props` in the component file.
+- **Hook return types**: `interface Use{Feature}Return` in the hook file.
 - **API response types**: Defined in `src/types/`, validated with Zod at the API boundary.
 
+Actual layout:
 ```
 src/types/
-├── chat.ts       # Message, ChatRequest, ChatResponse
-├── persona.ts    # Persona, PersonaSignal
-└── product.ts    # Product, Recommendation, FeedbackSignal
+├── chat.ts       # Message, ChatRequest, ChatEvent
+├── persona.ts    # Persona, FeedbackSignal, EMPTY_PERSONA
+└── product.ts    # ProductSchema (Zod), Product, Recommendation
 ```
 
-Types should mirror the backend Pydantic schemas. Keep them in sync manually for MVP; share via codegen if drift becomes a problem.
+Types mirror the backend Pydantic schemas. Keep them in sync manually for MVP; share via codegen if drift becomes a problem.
 
 ---
 
-## Validation
+## Actual Type Definitions
 
-Use **Zod** for runtime validation of data from external boundaries:
+### Message and Chat types (`src/types/chat.ts`)
+
+```tsx
+import type { Persona } from "./persona";
+
+export interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatRequest {
+  sessionId: string;
+  message: string;
+  persona: Persona | null;
+}
+
+export type ChatEvent =
+  | { type: "token"; content: string }
+  | { type: "persona_update"; persona: Persona }
+  | { type: "done" }
+  | { type: "error"; message: string };
+```
+
+### Persona types (`src/types/persona.ts`)
+
+```tsx
+export interface Persona {
+  projectType: string | null;
+  budgetTier: string | null;
+  role: string | null;
+  stylePreferences: string[];
+  materialPreferences: string[];
+  categories: string[];
+  rejections: string[];
+  approvals: string[];
+}
+
+export type FeedbackSignal = "like" | "dislike";
+
+export const EMPTY_PERSONA: Persona = {
+  projectType: null,
+  budgetTier: null,
+  role: null,
+  stylePreferences: [],
+  materialPreferences: [],
+  categories: [],
+  rejections: [],
+  approvals: [],
+};
+```
+
+### Product types with Zod (`src/types/product.ts`)
 
 ```tsx
 import { z } from "zod";
@@ -46,12 +99,26 @@ export const ProductSchema = z.object({
 });
 
 export type Product = z.infer<typeof ProductSchema>;
+
+export interface Recommendation {
+  product: Product;
+  score: number;
+}
 ```
+
+---
+
+## Validation
+
+Use **Zod** for runtime validation of data from external boundaries. The `ProductSchema` in `src/types/product.ts` is the reference example.
+
+Pattern: define a Zod schema, then derive the TypeScript type with `z.infer<typeof Schema>`. This keeps the runtime validator and static type in perfect sync.
 
 Validate at the API client boundary (`lib/api.ts`), not inside components:
 
 ```tsx
-export async function fetchRecommendations(personaEmbedding: number[]): Promise<Product[]> {
+// In lib/api.ts — validate response data
+export async function fetchRecommendations(sessionId: string, personaEmbedding: number[]): Promise<Recommendation[]> {
   const res = await fetch("/api/recommend", { ... });
   const data = await res.json();
   return z.array(ProductSchema).parse(data.products);
@@ -62,18 +129,54 @@ export async function fetchRecommendations(personaEmbedding: number[]): Promise<
 
 ## Common Patterns
 
-- **Discriminated unions** for message types:
+### Discriminated unions for event types
+
+`ChatEvent` in `src/types/chat.ts:14-18` uses a discriminated union on the `type` field. This enables exhaustive switch matching and narrows the type inside each branch.
 
 ```tsx
-type ChatEvent =
+export type ChatEvent =
   | { type: "token"; content: string }
   | { type: "persona_update"; persona: Persona }
   | { type: "done" }
   | { type: "error"; message: string };
 ```
 
-- **Literal types** for feedback signals: `"like" | "dislike"` (not `string`)
-- **`satisfies`** for type-checked object literals without widening
+### Literal types for constrained values
+
+`FeedbackSignal` in `src/types/persona.ts:12` uses a string literal union, not a plain `string`:
+```tsx
+export type FeedbackSignal = "like" | "dislike";
+```
+
+This is used in component props (`ProductCard.tsx:7`):
+```tsx
+onFeedback: (productId: string, signal: "like" | "dislike") => void;
+```
+
+### Constant objects for initial state
+
+`EMPTY_PERSONA` in `src/types/persona.ts:14-23` provides a typed default value. Used in `usePersona.ts:18`:
+```tsx
+const [persona, setPersona] = useState<Persona>(EMPTY_PERSONA);
+```
+
+### Extending native HTML element attributes
+
+`Button.tsx:6-8` extends `ButtonHTMLAttributes` for pass-through props:
+```tsx
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "ghost";
+}
+```
+
+### Import type
+
+Use `import type` for type-only imports. This is enforced by convention throughout the codebase:
+```tsx
+import type { Message } from "@/types/chat";
+import type { Product } from "@/types/product";
+import type { Persona, FeedbackSignal } from "@/types/persona";
+```
 
 ---
 
@@ -85,4 +188,18 @@ type ChatEvent =
 | `as` type assertions (except `as const`) | Bypasses type safety | Narrow with type guards |
 | `// @ts-ignore` / `// @ts-expect-error` without explanation | Hides real issues | Fix the type error |
 | `!` non-null assertion | Runtime null crashes | Handle the null case |
-| `enum` | Tree-shaking issues, surprising behavior | `as const` objects or union types |
+| `enum` | Tree-shaking issues, surprising behavior | `as const` objects or union types (see `FeedbackSignal`) |
+
+---
+
+## Reference Files
+
+| Pattern | File |
+|---------|------|
+| Zod schema + z.infer | `src/types/product.ts` |
+| Discriminated union | `src/types/chat.ts` (ChatEvent) |
+| Literal type alias | `src/types/persona.ts` (FeedbackSignal) |
+| Typed constant | `src/types/persona.ts` (EMPTY_PERSONA) |
+| Extend HTML attributes | `src/components/ui/Button.tsx` (ButtonProps) |
+| Hook return interface | `src/hooks/useChat.ts` (UseChatReturn) |
+| API client signatures | `src/lib/api.ts` |

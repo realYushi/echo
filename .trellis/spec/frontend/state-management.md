@@ -6,7 +6,7 @@
 
 ## Overview
 
-Lightweight state approach for MVP. React's built-in primitives (`useState`, `useRef`, prop drilling) cover most needs. The app has one main view (discovery split-pane) with two coordinated panels.
+Lightweight state approach for MVP. React's built-in primitives (`useState`, `useCallback`, prop drilling) cover all needs. The app has one main view (discovery split-pane) with two coordinated panels.
 
 ---
 
@@ -14,36 +14,65 @@ Lightweight state approach for MVP. React's built-in primitives (`useState`, `us
 
 | Category | Where it lives | Examples |
 |----------|---------------|----------|
-| **Component state** | `useState` in the component | Input field value, hover state, UI toggles |
-| **Feature state** | Custom hooks | Chat messages, persona, recommendations |
-| **Shared state** | Props passed from page component | Session ID, persona (shared between chat and recommendations) |
+| **Component state** | `useState` in the component | Input field value (`ChatInput.tsx:12`), UI toggles |
+| **Feature state** | Custom hooks | Chat messages (`useChat.ts`), persona (`usePersona.ts`), recommendations (`useRecommendations.ts`) |
+| **Shared state** | Props passed from page component | Session ID, messages, isStreaming, products (passed from `discover/page.tsx` to children) |
 | **Server state** | Backend (PostgreSQL/Qdrant) | Checkpoints, product catalog |
+
+---
+
+## State Coordination Pattern
+
+The `src/app/discover/page.tsx` is the state coordinator. It creates the session, calls the hooks, and passes data down to the two panels via props.
+
+**Actual implementation** from `src/app/discover/page.tsx`:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import { ChatPanel } from "@/components/chat/ChatPanel";
+import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
+import { useChat } from "@/hooks/useChat";
+import { useRecommendations } from "@/hooks/useRecommendations";
+
+export default function DiscoverPage() {
+  const [sessionId] = useState(() => crypto.randomUUID());
+  const chat = useChat(sessionId);
+  const recommendations = useRecommendations(sessionId);
+
+  return (
+    <div className="flex h-screen">
+      <div className="flex w-1/2 flex-col border-r border-gray-200">
+        <ChatPanel
+          messages={chat.messages}
+          onSend={chat.sendMessage}
+          isStreaming={chat.isStreaming}
+        />
+      </div>
+      <div className="w-1/2 overflow-y-auto p-6">
+        <RecommendationGrid
+          products={recommendations.products}
+          onFeedback={() => {}}
+          isLoading={recommendations.isLoading}
+        />
+      </div>
+    </div>
+  );
+}
+```
+
+Key details:
+- `sessionId` is created once via `useState(() => crypto.randomUUID())` -- the lazy initializer ensures it stays stable across re-renders
+- Each hook owns its slice of state (`chat` owns messages/streaming, `recommendations` owns products/loading)
+- Data flows down via props: `chat.messages` -> `ChatPanel`, `recommendations.products` -> `RecommendationGrid`
+- The `onFeedback` callback is currently a no-op `() => {}` -- it will be wired to `usePersona.addSignal` in a later PR
 
 ---
 
 ## When to Use Global State
 
-**For MVP: avoid global state stores.** The discovery page is the only view with complex state, and it can be managed by lifting state to the page component and passing down via props.
-
-```tsx
-// discover/page.tsx — state coordinator
-export default function DiscoverPage() {
-  const [sessionId] = useState(() => crypto.randomUUID());
-  const chat = useChat(sessionId);
-  const persona = usePersona(chat.latestPersona);
-  const recommendations = useRecommendations(persona.embedding);
-
-  return (
-    <SplitPane>
-      <ChatPanel {...chat} />
-      <RecommendationGrid
-        products={recommendations.products}
-        onFeedback={chat.sendFeedback}
-      />
-    </SplitPane>
-  );
-}
-```
+**For MVP: avoid global state stores.** The discovery page is the only view with complex state, and it is managed by lifting state to the page component and passing down via props.
 
 Introduce Zustand or Context only if:
 - 3+ levels of prop drilling for the same data
@@ -54,19 +83,19 @@ Introduce Zustand or Context only if:
 
 ## Server State
 
-- Server is the source of truth for: persona, recommendations, chat history (via checkpoints)
+- Server is the source of truth for: persona, recommendations, chat history (via LangGraph checkpoints)
 - Client holds a local copy that updates via SSE stream and REST responses
 - On page refresh: re-fetch from server using session ID (checkpoint restore)
-- Don't cache server state in `localStorage` — the backend checkpoint handles persistence
+- Don't cache server state in `localStorage` -- the backend checkpoint handles persistence
 
 ---
 
 ## Common Mistakes
 
-- **Don't reach for Context/Zustand by default** — prop drilling 1-2 levels is fine and more explicit
-- **Don't duplicate server state in client stores** — fetch from backend, hold in hook state
-- **Don't sync state between panels via events** — lift state to the shared parent instead
-- **Don't store derived values in state** — compute them during render
+- **Don't reach for Context/Zustand by default** -- prop drilling 1-2 levels is fine and more explicit
+- **Don't duplicate server state in client stores** -- fetch from backend, hold in hook state
+- **Don't sync state between panels via events** -- lift state to `discover/page.tsx` instead
+- **Don't store derived values in state** -- compute them during render
 
 ```tsx
 // Bad: derived state in useState
@@ -78,3 +107,15 @@ useEffect(() => {
 // Good: compute during render
 const filteredProducts = products.filter(...);
 ```
+
+---
+
+## Reference Files
+
+| Pattern | File |
+|---------|------|
+| State coordinator (page-level) | `src/app/discover/page.tsx` |
+| Feature state hook (chat) | `src/hooks/useChat.ts` |
+| Feature state hook (persona) | `src/hooks/usePersona.ts` |
+| Feature state hook (recommendations) | `src/hooks/useRecommendations.ts` |
+| Component-local state (input) | `src/components/chat/ChatInput.tsx` |
