@@ -110,6 +110,42 @@ class Persona(BaseModel):
     approvals: list[str] = []
 ```
 
+Thread-safe lazy singleton for heavy models (`app/utils/embeddings.py`):
+
+```python
+# app/utils/embeddings.py:17-39
+_model: torch.nn.Module | None = None
+_tokenizer: Any = None
+_lock = threading.Lock()
+
+def _load_model() -> tuple[torch.nn.Module, Any]:
+    global _model, _tokenizer  # noqa: PLW0603
+    if _model is None or _tokenizer is None:
+        with _lock:
+            if _model is None or _tokenizer is None:  # double-check after lock
+                _model, _, _ = open_clip.create_model_and_transforms("ViT-B-32", ...)
+                _model.eval()
+                _tokenizer = open_clip.get_tokenizer("ViT-B-32")
+    return _model, _tokenizer
+```
+
+Wrapping sync inference in `asyncio.to_thread()` (`app/utils/embeddings.py`):
+
+```python
+# app/utils/embeddings.py:42-65
+def _encode_text_sync(text: str) -> list[float]:
+    """Synchronous — run via asyncio.to_thread()."""
+    model, tokenizer = _load_model()
+    tokens = tokenizer([text])
+    with torch.no_grad():
+        text_features = model.encode_text(tokens)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
+    return text_features[0].tolist()
+
+async def get_clip_embedding(text: str) -> list[float]:
+    return await asyncio.to_thread(_encode_text_sync, text)
+```
+
 Agent state as `TypedDict` (`app/agent/state.py`):
 
 ```python

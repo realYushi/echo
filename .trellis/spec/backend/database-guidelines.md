@@ -106,7 +106,7 @@ async def get_qdrant_client(
 Service functions accept the client as a parameter:
 
 ```python
-# app/services/recommendation.py:11-18
+# app/services/recommendation.py:16-22
 async def get_recommendations(
     persona_embedding: list[float],
     qdrant_client: AsyncQdrantClient,
@@ -114,16 +114,66 @@ async def get_recommendations(
     limit: int = 10,
     score_threshold: float = 0.5,
 ) -> list[Recommendation]:
-    """Retrieve product recommendations from Qdrant based on persona embedding."""
 ```
 
 ```python
-# app/services/catalog.py:9-13
+# app/services/catalog.py:26-29
 async def seed_catalog(
     qdrant_client: AsyncQdrantClient,
     collection: str,
 ) -> int:
-    """Seed the product catalog into Qdrant. Returns number of products seeded."""
+```
+
+### Qdrant Patterns (Established)
+
+**Collection creation** — idempotent check-then-create:
+
+```python
+# app/services/catalog.py:33-41
+collections = await qdrant_client.get_collections()
+existing_names = [c.name for c in collections.collections]
+if collection not in existing_names:
+    await qdrant_client.create_collection(
+        collection_name=collection,
+        vectors_config=VectorParams(size=512, distance=Distance.COSINE),
+    )
+```
+
+**Point IDs** — deterministic UUID5 from string IDs (ensures idempotent upserts):
+
+```python
+# app/services/catalog.py:21-23
+def _product_id_to_uuid(product_id: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, product_id))
+```
+
+**Batch upsert** — build all points, then upsert once:
+
+```python
+# app/services/catalog.py:46-58
+points: list[PointStruct] = []
+for product in SEED_PRODUCTS:
+    embedding = await get_clip_embedding(product.description)
+    points.append(PointStruct(
+        id=_product_id_to_uuid(product.id),
+        vector=embedding,
+        payload=product.model_dump(),
+    ))
+await qdrant_client.upsert(collection_name=collection, points=points)
+```
+
+**Query** — use `query_points()` (not `search()`), iterate `response.points`:
+
+```python
+# app/services/recommendation.py:24-30
+response = await qdrant_client.query_points(
+    collection_name=collection,
+    query=persona_embedding,
+    limit=limit,
+    score_threshold=score_threshold,
+)
+for point in response.points:
+    product = Product(**point.payload)
 ```
 
 ---
@@ -189,3 +239,4 @@ When SQLAlchemy models are defined, uncomment the `Base` import in `alembic/env.
 - **Don't forget `await`** on async session operations -- this produces silent bugs.
 - **Don't create sessions inside service functions** -- inject via `get_db_session` dependency.
 - **Don't hardcode database URLs** -- always use `Settings` from `app/config.py`.
+- **Don't use `qdrant_client.search()`** -- it doesn't exist on `AsyncQdrantClient`. Use `query_points()` and iterate `response.points`.

@@ -42,6 +42,9 @@ backend/
 │   │   ├── chat.py          # Message, ChatRequest
 │   │   ├── persona.py       # Persona
 │   │   └── product.py       # Product, Recommendation, FeedbackRequest
+│   ├── data/
+│   │   ├── __init__.py
+│   │   └── products.py      # Seed data (SEED_PRODUCTS list of Product instances)
 │   └── utils/
 │       ├── __init__.py
 │       └── embeddings.py    # CLIP embedding helpers (get_clip_embedding)
@@ -68,6 +71,7 @@ backend/
 - **Agent**: LangGraph-specific code. The graph definition (`graph.py`) and node implementations (`nodes.py`). Agent state is a `TypedDict` defined in `state.py`.
 - **Models**: SQLAlchemy ORM models. One file per table or closely related group. Currently empty -- add models here when LangGraph checkpoints or other persistence is needed.
 - **Schemas**: Pydantic models for API request/response and internal data transfer.
+- **Data**: Static seed data and constants. Exports typed lists of Pydantic models (e.g., `SEED_PRODUCTS`).
 - **Utils**: Stateless helper functions. No dependencies on services or models.
 - **Dependencies**: FastAPI `Depends()` providers for settings, DB session, and Qdrant client. Shared across all routers.
 
