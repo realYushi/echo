@@ -390,3 +390,52 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Natural chatbot + spec sync
+
+**Date**: 2026-04-14
+**Task**: Natural chatbot + spec sync
+**Branch**: `task/natural-chatbot`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Feature | Description |
+|---------|-------------|
+| Claude discovery replies | Rewired discovery nodes to use multi-turn `build_anthropic_messages()` + structured JSON `{"reply","suggestions"}` output |
+| Likes/hates persona fields | Added `likes` and `hates` to Persona schema; rendered first in `persona_to_text()` for embedding priority |
+| Suggestion bubbles | New SSE `suggestions` event, `SuggestionBubbles` component, wired through `useChat` → `ChatPanel` → click-to-send |
+| Taste profile UI | "What it is like" / "What it is not like" cards + context chips in discover page aside |
+| Input focus restore | `ChatInput` uses `useRef` + `useEffect(disabled)` to restore focus after streaming |
+| Heuristic persona improvements | `_derive_taste_descriptors()`, `_normalize_persona_signals()` for likes/hates from styles, materials, feedback |
+| Fallback suggestions | Stage-aware `_fallback_suggestions()` and `_fallback_discovery_reply()` return (content, suggestions) tuples |
+| Spec sync | Updated 5 code-spec files: agent-recommendation-flow, component-guidelines, hook-guidelines, type-safety, state-management |
+
+**Key design decisions**:
+- Likes/hates are the primary embedding signal (rendered first in `persona_to_text()`)
+- Discovery reply + suggestions co-generated in one Claude call for cost and coherence
+- All discovery paths (Claude, fallback, greeting) must produce both content and suggestions
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2dda6b2` | (see git log) |
+| `0ea5504` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
