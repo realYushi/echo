@@ -39,7 +39,19 @@ async def create_ephemeral_token(*, settings: Settings) -> tuple[str, str]:
                 "uses": 1,
                 "expire_time": expire_time.isoformat(),
                 "new_session_expire_time": (now + timedelta(minutes=2)).isoformat(),
-                "live_connect_constraints": {"model": model},
+                "live_connect_constraints": {
+                    "model": model,
+                    "config": {
+                        "response_modalities": ["AUDIO"],
+                        "speech_config": {
+                            "voice_config": {
+                                "prebuilt_voice_config": {"voice_name": "Aoede"},
+                            },
+                        },
+                        "input_audio_transcription": {},
+                        "output_audio_transcription": {},
+                    },
+                },
             },
         )
 

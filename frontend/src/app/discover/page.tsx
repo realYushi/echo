@@ -229,7 +229,7 @@ export default function DiscoverPage() {
                 error={
                   mode === "voice"
                     ? voice.error ?? voiceFallbackError
-                    : chat.error ?? hydrationError
+                    : chat.error ?? voiceFallbackError ?? hydrationError
                 }
                 mode={mode}
                 voiceSlot={

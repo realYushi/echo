@@ -10,8 +10,33 @@ import type { TranscriptMessage } from "@/types/voice";
 const GEMINI_WS_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
 
-const SYSTEM_INSTRUCTION =
-  "You are Echo, a warm and curious interior design taste discovery assistant helping the user build a personalized taste profile that drives product recommendations.\n\nRules:\n- Keep each response to one or two short sentences. This is a voice conversation — be concise and natural, never read lists or sound scripted.\n- Ask at most one question per turn to keep the conversation flowing.\n- Focus on discovering aesthetic preferences: styles, materials, colors, textures, finishes, and budget range.\n- If the user goes off-topic, briefly acknowledge it and gently steer back toward design preferences.\n- Build on what the user shares — reference their earlier answers to show you're listening.\n- Sound genuinely interested and encouraging, like a knowledgeable friend helping them figure out their style.";
+const SYSTEM_INSTRUCTION = `You are Echo, a voice-based interior design taste discovery assistant. Your sole purpose is to uncover the user's aesthetic preferences and build their taste profile through natural conversation.
+
+Start the conversation with a greeting that covers these three points in two to three sentences:
+1. Introduce yourself as Echo, a design taste assistant
+2. Explain what happens: "I'll ask you a few questions about your style — colors, materials, aesthetics you love — and use that to find furniture and decor you'll love"
+3. Ask a concrete opening question like "To get started, can you describe a room or space that feels like you — what does it look like?"
+Do NOT say "How can I help you?" or anything generic. Jump straight into taste discovery.
+
+What to extract (taste signals):
+- Style and aesthetic preferences: modern, minimalist, warm, industrial, Scandinavian, maximalist, etc.
+- Material preferences: wood, marble, metal, leather, ceramic, concrete, etc.
+- Color and tone preferences: warm tones, matte black, earth tones, bold colors, neutrals, etc.
+- Texture and finish preferences: glossy, matte, brushed, raw, polished, etc.
+- Budget level: luxury, mid-range, budget-friendly, or no limit
+
+What to avoid:
+- Do NOT give design advice, product suggestions, or recommendations — that happens separately
+- Do NOT ask about room dimensions, functional requirements, or logistics
+- Do NOT read lists or use bullet points — this is a spoken conversation
+
+Rules:
+- Keep each response to one or two short sentences
+- Ask at most one question per turn
+- Build on what the user shares — reference their earlier answers to show you are listening
+- If the user goes off-topic, briefly acknowledge it and gently steer back to taste discovery
+- Sound genuinely curious and encouraging, like a knowledgeable friend helping them figure out their style
+- When you have a good sense of their preferences across several categories, let them know and wrap up naturally`;
 
 const CAPTURE_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
@@ -93,7 +118,8 @@ export function useVoiceChat(
   const micStreamRef = useRef<MediaStream | null>(null);
   const captureContextRef = useRef<AudioContext | null>(null);
   const playbackContextRef = useRef<AudioContext | null>(null);
-  const playerNodeRef = useRef<AudioWorkletNode | null>(null);
+  const nextPlayTimeRef = useRef(0);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeRef = useRef(false);
 
@@ -119,7 +145,11 @@ export function useVoiceChat(
     micStreamRef.current?.getTracks().forEach((track) => track.stop());
     micStreamRef.current = null;
 
-    playerNodeRef.current = null;
+    for (const src of activeSourcesRef.current) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
+    activeSourcesRef.current = [];
+    nextPlayTimeRef.current = 0;
 
     if (captureContextRef.current?.state !== "closed") {
       captureContextRef.current?.close();
@@ -191,11 +221,22 @@ export function useVoiceChat(
 
   const handleServerMessage = useCallback(
     (event: MessageEvent) => {
-      const data = JSON.parse(event.data as string);
+      const raw =
+        typeof event.data === "string"
+          ? event.data
+          : new TextDecoder().decode(event.data as ArrayBuffer);
+      const data = JSON.parse(raw);
 
       if (data.setupComplete) {
         setIsConnected(true);
         setIsConnecting(false);
+        wsRef.current?.send(
+          JSON.stringify({
+            realtimeInput: {
+              text: "Hello",
+            },
+          }),
+        );
         return;
       }
 
@@ -237,16 +278,59 @@ export function useVoiceChat(
         if (serverContent.modelTurn?.parts) {
           const parts = serverContent.modelTurn.parts as Array<{
             inlineData?: { data: string };
+            text?: string;
           }>;
           for (const part of parts) {
             if (part.inlineData?.data) {
-              const int16 = base64ToInt16(part.inlineData.data);
-              const float32 = int16ToFloat32(int16);
-              playerNodeRef.current?.port.postMessage(float32.buffer, [
-                float32.buffer,
-              ]);
+              const ctx = playbackContextRef.current;
+              if (ctx) {
+                const int16 = base64ToInt16(part.inlineData.data);
+                const float32 = int16ToFloat32(int16);
+                const buffer = ctx.createBuffer(
+                  1,
+                  float32.length,
+                  PLAYBACK_SAMPLE_RATE,
+                );
+                buffer.getChannelData(0).set(float32);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                const startTime = Math.max(
+                  ctx.currentTime,
+                  nextPlayTimeRef.current,
+                );
+                source.onended = () => {
+                  activeSourcesRef.current =
+                    activeSourcesRef.current.filter((s) => s !== source);
+                };
+                activeSourcesRef.current.push(source);
+                source.start(startTime);
+                nextPlayTimeRef.current = startTime + buffer.duration;
+              }
+            }
+            if (part.text) {
+              const text = part.text;
+              assistantTranscriptRef.current += text;
+              setTranscripts((prev) => {
+                const lastMessage = prev.at(-1);
+                if (lastMessage?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...lastMessage, content: lastMessage.content + text },
+                  ];
+                }
+                return [...prev, createMessage("assistant", text)];
+              });
             }
           }
+        }
+
+        if (serverContent.interrupted) {
+          for (const src of activeSourcesRef.current) {
+            try { src.stop(); } catch { /* already stopped */ }
+          }
+          activeSourcesRef.current = [];
+          nextPlayTimeRef.current = 0;
         }
 
         if (serverContent.turnComplete) {
@@ -307,7 +391,8 @@ export function useVoiceChat(
 
       await Promise.all([
         captureContext.audioWorklet.addModule("/worklets/pcm-processor.js"),
-        playbackContext.audioWorklet.addModule("/worklets/pcm-processor.js"),
+        captureContext.resume(),
+        playbackContext.resume(),
       ]);
 
       if (controller.signal.aborted) {
@@ -318,6 +403,7 @@ export function useVoiceChat(
       const ws = new WebSocket(
         `${GEMINI_WS_URL}?access_token=${tokenResponse.token}`,
       );
+      ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -326,17 +412,10 @@ export function useVoiceChat(
             model: `models/${tokenResponse.model}`,
             generationConfig: {
               responseModalities: ["AUDIO"],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Aoede" },
-                },
-              },
             },
             systemInstruction: {
               parts: [{ text: SYSTEM_INSTRUCTION }],
             },
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
           },
         };
         ws.send(JSON.stringify(setupMessage));
@@ -352,12 +431,10 @@ export function useVoiceChat(
             ws.send(
               JSON.stringify({
                 realtimeInput: {
-                  mediaChunks: [
-                    {
-                      mimeType: "audio/pcm;rate=16000",
-                      data: base64,
-                    },
-                  ],
+                  audio: {
+                    data: base64,
+                    mimeType: "audio/pcm;rate=16000",
+                  },
                 },
               }),
             );
@@ -365,35 +442,29 @@ export function useVoiceChat(
         };
         source.connect(captureNode);
 
-        const playerNode = new AudioWorkletNode(
-          playbackContext,
-          "pcm-player",
-        );
-        playerNode.connect(playbackContext.destination);
-        playerNodeRef.current = playerNode;
+        nextPlayTimeRef.current = 0;
       };
 
       ws.onmessage = handleServerMessage;
 
+      const wsErrorRef = { hadError: false };
+
       ws.onerror = () => {
-        if (!activeRef.current) {
-          return;
-        }
-        setError("Voice connection encountered an error.");
-        onFallbackToText(
-          "Voice connection was interrupted. Switching to text mode.",
-        );
-        cleanup();
+        wsErrorRef.hadError = true;
       };
 
       ws.onclose = (event) => {
         if (!activeRef.current) {
           return;
         }
-        if (event.code !== 1000) {
-          onFallbackToText(
-            "Voice connection was interrupted. Switching to text mode.",
-          );
+        if (event.code !== 1000 || wsErrorRef.hadError) {
+          const reason =
+            event.reason ||
+            (event.code === 1006
+              ? "WebSocket connection failed (code 1006). Check the Gemini API key and network."
+              : `Voice connection closed (code ${event.code}).`);
+          setError(reason);
+          onFallbackToText(reason);
         }
         cleanup();
       };

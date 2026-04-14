@@ -91,12 +91,46 @@ Before implementation:
 - [ ] Decided where validation happens
 - [ ] Confirmed snake_case/camelCase serialization strategy (CamelModel + `by_alias=True`)
 - [ ] Router endpoint signature types are imported at runtime (not under TYPE_CHECKING)
+- [ ] For external APIs: verified wire format against the specific endpoint variant being used
+- [ ] For WebSockets: set `binaryType = "arraybuffer"`, decode explicitly
 
 After implementation:
 - [ ] Tested with edge cases (null, empty, invalid)
 - [ ] Verified error handling at each boundary
 - [ ] Checked data survives round-trip
 - [ ] Verified API responses use camelCase keys
+- [ ] For audio/media: verified end-to-end playback, not just data arrival
+
+### Mistake 6: External API Endpoint Variant Mismatch
+
+**Bad**: Reading the "Getting Started" guide for an external API and assuming all endpoint variants share the same message schema.
+
+**Good**: Verify the wire format against the **specific endpoint variant** being used. Different authentication methods (API key vs. ephemeral token) often route to different server endpoints with different schemas. Example: Gemini's `BidiGenerateContent` (v1beta, API key) accepts `config` wrapper with flat fields; `BidiGenerateContentConstrained` (v1alpha, ephemeral token) accepts `setup` wrapper with nested `generationConfig` and restricts which fields the frontend can set.
+
+### Mistake 7: Assuming WebSocket Text Frames
+
+**Bad**: Parsing `event.data` as a string directly (`JSON.parse(event.data)`), assuming the server sends text frames.
+
+**Good**: Always set `ws.binaryType = "arraybuffer"` and decode explicitly: `new TextDecoder().decode(event.data)`. External WebSocket APIs may send binary frames containing JSON, which arrive as `Blob` (default) or `ArrayBuffer` in the browser.
+
+### Mistake 8: AudioContext Suspension After Async
+
+**Bad**: Creating an `AudioContext` after `await` calls in a click handler and assuming it auto-resumes.
+
+**Good**: Always call `audioContext.resume()` explicitly. After any `await` in an event handler, the browser no longer considers subsequent code as part of the user gesture, so AudioContexts created or resumed after that point may stay suspended.
+
+---
+
+## External API Integration Checklist
+
+Before integrating a third-party WebSocket or streaming API:
+
+- [ ] Identified the **exact endpoint variant** for the auth method being used
+- [ ] Verified the **wire format** (message schema, wrapper keys, field casing) against that specific variant
+- [ ] Set `ws.binaryType = "arraybuffer"` and decode messages explicitly
+- [ ] Confirmed which config belongs on the **server side** (token constraints, API key config) vs. **client side** (session setup message)
+- [ ] Tested with the actual endpoint, not just against documentation examples
+- [ ] Verified audio/media playback end-to-end (not just data arrival)
 
 ---
 
