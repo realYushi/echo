@@ -68,6 +68,10 @@ async def _chat_stream(
     if assistant_message:
         yield _sse_event({"type": "token", "content": assistant_message})
 
+    suggestions = result.get("suggestions", [])
+    if suggestions:
+        yield _sse_event({"type": "suggestions", "suggestions": suggestions})
+
     persona = result.get("persona")
     if persona is not None:
         yield _sse_event({"type": "persona_update", "persona": persona.model_dump(by_alias=True)})

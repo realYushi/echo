@@ -1,4 +1,7 @@
-.PHONY: up down backend-dev frontend-dev install lint test db-migrate db-revision
+.PHONY: dev up down backend-dev frontend-dev install lint test db-migrate db-revision
+
+dev:
+	./scripts/dev.sh
 
 up:
 	docker compose up -d

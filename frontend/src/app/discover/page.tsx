@@ -94,13 +94,15 @@ export default function DiscoverPage() {
     sessionId,
   ]);
 
-  const signalChips = [
-    ...persona.persona.categories,
-    ...persona.persona.stylePreferences,
-    ...persona.persona.materialPreferences,
-  ].slice(0, 6);
-  const recentApprovals = persona.persona.approvals.slice(-2);
-  const recentRejections = persona.persona.rejections.slice(-2);
+  const contextChips = [
+    ...new Set([
+      ...(persona.persona.projectType ? [persona.persona.projectType] : []),
+      ...(persona.persona.budgetTier ? [persona.persona.budgetTier] : []),
+      ...persona.persona.categories,
+    ]),
+  ].slice(0, 4);
+  const likesSignals = persona.persona.likes;
+  const hatesSignals = persona.persona.hates;
   const hasConversation = chat.messages.length > 0;
 
   async function handleFeedback(productId: string, signal: "like" | "dislike") {
@@ -111,7 +113,7 @@ export default function DiscoverPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(46,106,79,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(125,84,48,0.12),transparent_22%),linear-gradient(180deg,#f7f1e8_0%,#efe5d6_100%)]">
+    <main className="relative min-h-screen overflow-x-clip bg-[radial-gradient(circle_at_top_left,rgba(46,106,79,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(125,84,48,0.12),transparent_22%),linear-gradient(180deg,#f7f1e8_0%,#efe5d6_100%)]">
       <div className="pointer-events-none absolute inset-0 opacity-70">
         <div className="absolute top-[-6rem] left-[-8rem] h-64 w-64 rounded-full bg-[color:var(--accent)]/12 blur-3xl" />
         <div className="absolute right-[-5rem] bottom-[-10rem] h-72 w-72 rounded-full bg-[#b9824a]/12 blur-3xl" />
@@ -143,19 +145,23 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(340px,0.75fr)]">
-          <section className="min-h-[40rem] overflow-hidden rounded-[32px] border border-[color:var(--line)] bg-[color:var(--panel)]/92 shadow-[0_28px_80px_rgba(29,42,34,0.1)] backdrop-blur-sm">
-            <ChatPanel
-              messages={chat.messages}
-              onSend={chat.sendMessage}
-              isStreaming={chat.isStreaming}
-              inputDisabled={!isReady || isHydrating || chat.isStreaming}
-              statusLabel={
-                !isReady ? "Loading" : isHydrating ? "Restoring" : undefined
-              }
-              error={chat.error ?? hydrationError}
-            />
-          </section>
+        <div className="grid flex-1 gap-4 xl:items-start xl:grid-cols-[minmax(0,0.9fr)_minmax(340px,0.75fr)]">
+          <div className="sticky top-4 z-10 self-start">
+            <section className="h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden rounded-[32px] border border-[color:var(--line)] bg-[color:var(--panel)]/92 shadow-[0_28px_80px_rgba(29,42,34,0.1)] backdrop-blur-sm xl:h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)]">
+              <ChatPanel
+                messages={chat.messages}
+                suggestions={chat.suggestions}
+                onSend={chat.sendMessage}
+                onSuggestionSelect={chat.sendMessage}
+                isStreaming={chat.isStreaming}
+                inputDisabled={!isReady || isHydrating || chat.isStreaming}
+                statusLabel={
+                  !isReady ? "Loading" : isHydrating ? "Restoring" : undefined
+                }
+                error={chat.error ?? hydrationError}
+              />
+            </section>
+          </div>
 
           <aside className="flex min-h-[40rem] flex-col gap-4">
             <section className="rounded-[32px] border border-[color:var(--line)] bg-white/70 p-5 shadow-[0_24px_60px_rgba(29,42,34,0.08)] backdrop-blur-sm">
@@ -170,48 +176,58 @@ export default function DiscoverPage() {
                 it to reshape the shortlist in real time.
               </p>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {signalChips.length > 0 ? (
-                  signalChips.map((chip) => (
+              {contextChips.length > 0 && (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {contextChips.map((chip) => (
                     <span
                       key={chip}
                       className="rounded-full border border-[color:var(--line)] bg-[color:var(--accent-soft)]/55 px-3 py-1 text-xs text-[color:var(--ink)]"
                     >
                       {chip}
                     </span>
-                  ))
-                ) : (
-                  <span className="rounded-full border border-dashed border-[color:var(--line)] px-3 py-1 text-xs text-[color:var(--muted)]">
-                    Waiting for your first cues
-                  </span>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4">
                   <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
-                    Leaning toward
+                    What it is like
                   </p>
-                  <div className="mt-3 space-y-2 text-sm text-[color:var(--ink)]">
-                    {recentApprovals.length > 0 ? (
-                      recentApprovals.map((item) => <p key={item}>{item}</p>)
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {likesSignals.length > 0 ? (
+                      likesSignals.map((item) => (
+                        <span
+                          key={item}
+                          className="rounded-full border border-[color:var(--accent)]/25 bg-[color:var(--accent-soft)]/40 px-2.5 py-1 text-xs text-[color:var(--ink)]"
+                        >
+                          {item}
+                        </span>
+                      ))
                     ) : (
-                      <p className="text-[color:var(--muted)]">
-                        Positive reactions will show up here.
+                      <p className="text-xs text-[color:var(--muted)]">
+                        Positive signals will show up here.
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4">
                   <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
-                    Pull back from
+                    What it is not like
                   </p>
-                  <div className="mt-3 space-y-2 text-sm text-[color:var(--ink)]">
-                    {recentRejections.length > 0 ? (
-                      recentRejections.map((item) => <p key={item}>{item}</p>)
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {hatesSignals.length > 0 ? (
+                      hatesSignals.map((item) => (
+                        <span
+                          key={item}
+                          className="rounded-full border border-red-200 bg-red-50/60 px-2.5 py-1 text-xs text-[color:var(--ink)]"
+                        >
+                          {item}
+                        </span>
+                      ))
                     ) : (
-                      <p className="text-[color:var(--muted)]">
-                        Rejections help Echo learn even faster.
+                      <p className="text-xs text-[color:var(--muted)]">
+                        Dislikes help Echo steer away faster.
                       </p>
                     )}
                   </div>

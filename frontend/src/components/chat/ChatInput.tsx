@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 
 interface ChatInputProps {
@@ -10,6 +10,13 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!disabled) {
+      inputRef.current?.focus();
+    }
+  }, [disabled]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,6 +27,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
 
     setInput("");
     void onSend(trimmed);
+    inputRef.current?.focus();
   }
 
   return (
@@ -32,6 +40,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       </label>
       <div className="flex items-center gap-3 rounded-[24px] border border-[color:var(--line)] bg-white/90 p-2 shadow-[0_16px_40px_rgba(29,42,34,0.08)]">
         <input
+          ref={inputRef}
           id="chat-input"
           type="text"
           value={input}

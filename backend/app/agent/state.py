@@ -18,4 +18,5 @@ class AgentState(TypedDict, total=False):
     recommendations: list[product_schema.Recommendation]
     session_id: str
     assistant_message: str
+    suggestions: list[str]
     pending_feedback: PendingFeedback | None

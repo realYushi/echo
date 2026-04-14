@@ -9,6 +9,8 @@ class Persona(CamelModel):
     project_type: str | None = None
     budget_tier: str | None = None
     role: str | None = None
+    likes: list[str] = []
+    hates: list[str] = []
     style_preferences: list[str] = []
     material_preferences: list[str] = []
     categories: list[str] = []

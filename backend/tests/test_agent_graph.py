@@ -97,6 +97,7 @@ async def test_run_agent_turn_generates_persona_and_recommendations(
     assert result["persona"] is not None
     assert result["persona"].project_type == "kitchen"
     assert result["assistant_message"]
+    assert result["suggestions"]
     assert result["messages"][-1]["role"] == "assistant"
     assert len(result["recommendations"]) == 1
     assert isinstance(result["recommendations"][0], Recommendation)
@@ -154,4 +155,95 @@ async def test_run_agent_turn_applies_feedback_and_refreshes_recommendations(mon
     assert result["pending_feedback"] is None
     assert result["persona"] is not None
     assert "Cascading Crystal Chandelier" in result["persona"].approvals
+    assert result["suggestions"]
     assert result["recommendations"]
+
+
+async def test_run_agent_turn_uses_latest_project_signal_on_first_substantive_turn() -> None:
+    qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
+    settings = Settings(
+        anthropic_model="stub-model",
+        qdrant_collection="products",
+        recommendation_limit=6,
+        recommendation_score_threshold=0.45,
+        min_recommendation_signals=2,
+    )
+    state: AgentState = {
+        "messages": [
+            {
+                "role": "user",
+                "content": "I wanna find something for my kitchen",
+            }
+        ],
+        "session_id": "session-3",
+    }
+
+    result = await run_agent_turn(
+        state,
+        settings=settings,
+        qdrant_client=qdrant_client,
+        anthropic_client=None,
+    )
+
+    assert "What look feels right to you" in result["assistant_message"]
+    assert result["persona"] is not None
+    assert result["persona"].project_type == "kitchen"
+
+
+async def test_run_agent_turn_uses_latest_project_signal_on_follow_up_turn() -> None:
+    qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
+    settings = Settings(
+        anthropic_model="stub-model",
+        qdrant_collection="products",
+        recommendation_limit=6,
+        recommendation_score_threshold=0.45,
+        min_recommendation_signals=2,
+    )
+    state: AgentState = {
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "Hi — I can help narrow this down fast."},
+            {"role": "user", "content": "i wanna find some thing for my kitchen"},
+        ],
+        "session_id": "session-4",
+    }
+
+    result = await run_agent_turn(
+        state,
+        settings=settings,
+        qdrant_client=qdrant_client,
+        anthropic_client=None,
+    )
+
+    assert "What look feels right to you" in result["assistant_message"]
+    assert result["persona"] is not None
+    assert result["persona"].project_type == "kitchen"
+
+
+async def test_run_agent_turn_handles_small_talk_before_project_signal() -> None:
+    qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
+    settings = Settings(
+        anthropic_model="stub-model",
+        qdrant_collection="products",
+        recommendation_limit=6,
+        recommendation_score_threshold=0.45,
+        min_recommendation_signals=2,
+    )
+    state: AgentState = {
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "Hi — I can help narrow this down fast."},
+            {"role": "user", "content": "how are you"},
+        ],
+        "session_id": "session-5",
+    }
+
+    result = await run_agent_turn(
+        state,
+        settings=settings,
+        qdrant_client=qdrant_client,
+        anthropic_client=None,
+    )
+
+    assert "Doing well" in result["assistant_message"]
+    assert "Which space are we choosing for" in result["assistant_message"]

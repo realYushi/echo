@@ -56,6 +56,8 @@ async def test_get_session_snapshot_returns_saved_state() -> None:
             "projectType": None,
             "budgetTier": None,
             "role": None,
+            "likes": [],
+            "hates": [],
             "stylePreferences": ["sculptural"],
             "materialPreferences": [],
             "categories": ["lighting"],

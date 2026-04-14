@@ -19,6 +19,10 @@ export const ChatEventSchema = z.discriminatedUnion("type", [
     content: z.string(),
   }),
   z.object({
+    type: z.literal("suggestions"),
+    suggestions: z.array(z.string()),
+  }),
+  z.object({
     type: z.literal("persona_update"),
     persona: PersonaSchema,
   }),

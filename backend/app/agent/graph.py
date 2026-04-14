@@ -77,6 +77,7 @@ async def run_agent_turn(
     normalized_state: AgentState = {
         **state,
         "assistant_message": "",
+        "suggestions": [],
     }
     graph = cast(
         "CompiledAgentGraph",

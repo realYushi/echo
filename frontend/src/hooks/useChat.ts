@@ -13,6 +13,7 @@ interface UseChatOptions {
 
 interface UseChatReturn {
   messages: Message[];
+  suggestions: string[];
   replaceMessages: (messages: Message[]) => void;
   sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
@@ -62,6 +63,7 @@ export function useChat(
   options: UseChatOptions,
 ): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -76,6 +78,7 @@ export function useChat(
   useEffect(() => {
     abortControllerRef.current?.abort();
     setMessages([]);
+    setSuggestions([]);
     setIsStreaming(false);
     setError(null);
   }, [sessionId]);
@@ -97,6 +100,7 @@ export function useChat(
       abortControllerRef.current = controller;
 
       setError(null);
+      setSuggestions([]);
       setMessages((prev) => [...prev, createMessage("user", trimmed)]);
       setIsStreaming(true);
 
@@ -119,6 +123,9 @@ export function useChat(
                 setMessages((prev) =>
                   appendAssistantContent(prev, event.content),
                 );
+                return;
+              case "suggestions":
+                setSuggestions(event.suggestions);
                 return;
               case "persona_update":
                 onPersonaUpdate(event.persona);
@@ -149,6 +156,7 @@ export function useChat(
 
         const message = getErrorMessage(nextError);
         setError(message);
+        setSuggestions([]);
         if (!receivedAssistantContent) {
           setMessages((prev) => appendAssistantContent(prev, message));
         }
@@ -162,5 +170,12 @@ export function useChat(
     [isStreaming, onPersonaUpdate, onTurnComplete, persona, sessionId],
   );
 
-  return { messages, replaceMessages, sendMessage, isStreaming, error };
+  return {
+    messages,
+    suggestions,
+    replaceMessages,
+    sendMessage,
+    isStreaming,
+    error,
+  };
 }

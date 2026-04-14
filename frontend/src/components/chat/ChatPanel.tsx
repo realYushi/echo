@@ -4,11 +4,14 @@ import { useEffect, useRef } from "react";
 import type { Message } from "@/types/chat";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageBubble } from "@/components/chat/MessageBubble";
+import { SuggestionBubbles } from "@/components/chat/SuggestionBubbles";
 import { cn } from "@/lib/utils";
 
 interface ChatPanelProps {
   messages: Message[];
+  suggestions: string[];
   onSend: (message: string) => Promise<void> | void;
+  onSuggestionSelect: (message: string) => Promise<void> | void;
   isStreaming: boolean;
   inputDisabled?: boolean;
   statusLabel?: string;
@@ -17,7 +20,9 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   messages,
+  suggestions,
   onSend,
+  onSuggestionSelect,
   isStreaming,
   inputDisabled,
   statusLabel,
@@ -94,6 +99,11 @@ export function ChatPanel({
 
         <div ref={endRef} />
       </div>
+      <SuggestionBubbles
+        suggestions={suggestions}
+        onSelect={onSuggestionSelect}
+        disabled={inputDisabled ?? isStreaming}
+      />
       <ChatInput onSend={onSend} disabled={inputDisabled ?? isStreaming} />
     </div>
   );

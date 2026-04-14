@@ -62,6 +62,8 @@ describe("fetchSessionSnapshot", () => {
             projectType: null,
             budgetTier: null,
             role: null,
+            likes: [],
+            hates: [],
             stylePreferences: ["sculptural"],
             materialPreferences: [],
             categories: ["lighting"],
