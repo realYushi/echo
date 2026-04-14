@@ -1,0 +1,512 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchVoiceToken, postVoiceTranscript } from "@/lib/api";
+import type { Message } from "@/types/chat";
+import type { Persona } from "@/types/persona";
+import type { Recommendation } from "@/types/product";
+import type { TranscriptMessage } from "@/types/voice";
+
+const GEMINI_WS_URL =
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
+
+const SYSTEM_INSTRUCTION = `You are Echo, a voice-based interior design taste discovery assistant. Your sole purpose is to uncover the user's aesthetic preferences and build their taste profile through natural conversation.
+
+Start the conversation with a greeting that covers these three points in two to three sentences:
+1. Introduce yourself as Echo, a design taste assistant
+2. Explain what happens: "I'll ask you a few questions about your style — colors, materials, aesthetics you love — and use that to find furniture and decor you'll love"
+3. Ask a concrete opening question like "To get started, can you describe a room or space that feels like you — what does it look like?"
+Do NOT say "How can I help you?" or anything generic. Jump straight into taste discovery.
+
+What to extract (taste signals):
+- Style and aesthetic preferences: modern, minimalist, warm, industrial, Scandinavian, maximalist, etc.
+- Material preferences: wood, marble, metal, leather, ceramic, concrete, etc.
+- Color and tone preferences: warm tones, matte black, earth tones, bold colors, neutrals, etc.
+- Texture and finish preferences: glossy, matte, brushed, raw, polished, etc.
+- Budget level: luxury, mid-range, budget-friendly, or no limit
+
+What to avoid:
+- Do NOT give design advice, product suggestions, or recommendations — that happens separately
+- Do NOT ask about room dimensions, functional requirements, or logistics
+- Do NOT read lists or use bullet points — this is a spoken conversation
+
+Rules:
+- Keep each response to one or two short sentences
+- Ask at most one question per turn
+- Build on what the user shares — reference their earlier answers to show you are listening
+- If the user goes off-topic, briefly acknowledge it and gently steer back to taste discovery
+- Sound genuinely curious and encouraging, like a knowledgeable friend helping them figure out their style
+- When you have a good sense of their preferences across several categories, let them know and wrap up naturally`;
+
+const CAPTURE_SAMPLE_RATE = 16000;
+const PLAYBACK_SAMPLE_RATE = 24000;
+
+interface UseVoiceChatOptions {
+  onPersonaUpdate: (persona: Persona) => void;
+  onRecommendationsUpdate: (recommendations: Recommendation[]) => void;
+  onFallbackToText: (reason: string) => void;
+}
+
+interface UseVoiceChatReturn {
+  connect: () => Promise<void>;
+  disconnect: () => void;
+  isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
+  transcripts: Message[];
+}
+
+function createMessage(role: Message["role"], content: string): Message {
+  return {
+    id: crypto.randomUUID(),
+    role,
+    content,
+  };
+}
+
+function int16ToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToInt16(base64: string): Int16Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Int16Array(bytes.buffer);
+}
+
+function int16ToFloat32(int16: Int16Array): Float32Array {
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 0x7fff;
+  }
+  return float32;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Voice connection failed. Please try again.";
+}
+
+export function useVoiceChat(
+  sessionId: string | null,
+  options: UseVoiceChatOptions,
+): UseVoiceChatReturn {
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [transcripts, setTranscripts] = useState<Message[]>([]);
+
+  const { onPersonaUpdate, onRecommendationsUpdate, onFallbackToText } =
+    options;
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const captureContextRef = useRef<AudioContext | null>(null);
+  const playbackContextRef = useRef<AudioContext | null>(null);
+  const nextPlayTimeRef = useRef(0);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRef = useRef(false);
+
+  const userTranscriptRef = useRef("");
+  const assistantTranscriptRef = useRef("");
+  const transcriptHistoryRef = useRef<TranscriptMessage[]>([]);
+
+  const cleanup = useCallback(() => {
+    activeRef.current = false;
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+
+    if (wsRef.current) {
+      wsRef.current.onopen = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    micStreamRef.current = null;
+
+    for (const src of activeSourcesRef.current) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
+    activeSourcesRef.current = [];
+    nextPlayTimeRef.current = 0;
+
+    if (captureContextRef.current?.state !== "closed") {
+      captureContextRef.current?.close();
+    }
+    captureContextRef.current = null;
+
+    if (playbackContextRef.current?.state !== "closed") {
+      playbackContextRef.current?.close();
+    }
+    playbackContextRef.current = null;
+
+    userTranscriptRef.current = "";
+    assistantTranscriptRef.current = "";
+
+    setIsConnected(false);
+    setIsConnecting(false);
+  }, []);
+
+  const sendTranscriptsToBackend = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!sessionId) {
+        return;
+      }
+
+      const userText = userTranscriptRef.current.trim();
+      const assistantText = assistantTranscriptRef.current.trim();
+
+      if (userText) {
+        transcriptHistoryRef.current = [
+          ...transcriptHistoryRef.current,
+          { role: "user", content: userText },
+        ];
+      }
+      if (assistantText) {
+        transcriptHistoryRef.current = [
+          ...transcriptHistoryRef.current,
+          { role: "assistant", content: assistantText },
+        ];
+      }
+
+      userTranscriptRef.current = "";
+      assistantTranscriptRef.current = "";
+
+      if (transcriptHistoryRef.current.length === 0) {
+        return;
+      }
+
+      try {
+        const response = await postVoiceTranscript(
+          sessionId,
+          transcriptHistoryRef.current,
+          signal,
+        );
+
+        if (response.persona) {
+          onPersonaUpdate(response.persona);
+        }
+        if (response.recommendations.length > 0) {
+          onRecommendationsUpdate(response.recommendations);
+        }
+      } catch (nextError) {
+        if (!isAbortError(nextError)) {
+          setError(getErrorMessage(nextError));
+        }
+      }
+    },
+    [sessionId, onPersonaUpdate, onRecommendationsUpdate],
+  );
+
+  const handleServerMessage = useCallback(
+    (event: MessageEvent) => {
+      const raw =
+        typeof event.data === "string"
+          ? event.data
+          : new TextDecoder().decode(event.data as ArrayBuffer);
+      const data = JSON.parse(raw);
+
+      if (data.setupComplete) {
+        setIsConnected(true);
+        setIsConnecting(false);
+        wsRef.current?.send(
+          JSON.stringify({
+            realtimeInput: {
+              text: "Hello",
+            },
+          }),
+        );
+        return;
+      }
+
+      if (data.serverContent) {
+        const serverContent = data.serverContent;
+
+        if (serverContent.inputTranscription?.text) {
+          const text = serverContent.inputTranscription.text as string;
+          userTranscriptRef.current += text;
+
+          setTranscripts((prev) => {
+            const lastMessage = prev.at(-1);
+            if (lastMessage?.role === "user") {
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMessage, content: lastMessage.content + text },
+              ];
+            }
+            return [...prev, createMessage("user", text)];
+          });
+        }
+
+        if (serverContent.outputTranscription?.text) {
+          const text = serverContent.outputTranscription.text as string;
+          assistantTranscriptRef.current += text;
+
+          setTranscripts((prev) => {
+            const lastMessage = prev.at(-1);
+            if (lastMessage?.role === "assistant") {
+              return [
+                ...prev.slice(0, -1),
+                { ...lastMessage, content: lastMessage.content + text },
+              ];
+            }
+            return [...prev, createMessage("assistant", text)];
+          });
+        }
+
+        if (serverContent.modelTurn?.parts) {
+          const parts = serverContent.modelTurn.parts as Array<{
+            inlineData?: { data: string };
+            text?: string;
+          }>;
+          for (const part of parts) {
+            if (part.inlineData?.data) {
+              const ctx = playbackContextRef.current;
+              if (ctx) {
+                const int16 = base64ToInt16(part.inlineData.data);
+                const float32 = int16ToFloat32(int16);
+                const buffer = ctx.createBuffer(
+                  1,
+                  float32.length,
+                  PLAYBACK_SAMPLE_RATE,
+                );
+                buffer.getChannelData(0).set(float32);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                const startTime = Math.max(
+                  ctx.currentTime,
+                  nextPlayTimeRef.current,
+                );
+                source.onended = () => {
+                  activeSourcesRef.current =
+                    activeSourcesRef.current.filter((s) => s !== source);
+                };
+                activeSourcesRef.current.push(source);
+                source.start(startTime);
+                nextPlayTimeRef.current = startTime + buffer.duration;
+              }
+            }
+            if (part.text) {
+              const text = part.text;
+              assistantTranscriptRef.current += text;
+              setTranscripts((prev) => {
+                const lastMessage = prev.at(-1);
+                if (lastMessage?.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...lastMessage, content: lastMessage.content + text },
+                  ];
+                }
+                return [...prev, createMessage("assistant", text)];
+              });
+            }
+          }
+        }
+
+        if (serverContent.interrupted) {
+          for (const src of activeSourcesRef.current) {
+            try { src.stop(); } catch { /* already stopped */ }
+          }
+          activeSourcesRef.current = [];
+          nextPlayTimeRef.current = 0;
+        }
+
+        if (serverContent.turnComplete) {
+          sendTranscriptsToBackend(abortControllerRef.current?.signal);
+        }
+      }
+    },
+    [sendTranscriptsToBackend],
+  );
+
+  const connect = useCallback(async () => {
+    if (!sessionId || activeRef.current) {
+      return;
+    }
+
+    activeRef.current = true;
+    setIsConnecting(true);
+    setError(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const tokenResponse = await fetchVoiceToken(controller.signal);
+
+      let micStream: MediaStream;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: CAPTURE_SAMPLE_RATE,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch {
+        onFallbackToText("Microphone access is required for voice mode.");
+        cleanup();
+        return;
+      }
+
+      if (controller.signal.aborted) {
+        micStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      micStreamRef.current = micStream;
+
+      const captureContext = new AudioContext({
+        sampleRate: CAPTURE_SAMPLE_RATE,
+      });
+      captureContextRef.current = captureContext;
+
+      const playbackContext = new AudioContext({
+        sampleRate: PLAYBACK_SAMPLE_RATE,
+      });
+      playbackContextRef.current = playbackContext;
+
+      await Promise.all([
+        captureContext.audioWorklet.addModule("/worklets/pcm-processor.js"),
+        captureContext.resume(),
+        playbackContext.resume(),
+      ]);
+
+      if (controller.signal.aborted) {
+        cleanup();
+        return;
+      }
+
+      const ws = new WebSocket(
+        `${GEMINI_WS_URL}?access_token=${tokenResponse.token}`,
+      );
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        const setupMessage = {
+          setup: {
+            model: `models/${tokenResponse.model}`,
+            generationConfig: {
+              responseModalities: ["AUDIO"],
+            },
+            systemInstruction: {
+              parts: [{ text: SYSTEM_INSTRUCTION }],
+            },
+          },
+        };
+        ws.send(JSON.stringify(setupMessage));
+
+        const source = captureContext.createMediaStreamSource(micStream);
+        const captureNode = new AudioWorkletNode(
+          captureContext,
+          "pcm-capture",
+        );
+        captureNode.port.onmessage = (msg: MessageEvent) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            const base64 = int16ToBase64(msg.data as ArrayBuffer);
+            ws.send(
+              JSON.stringify({
+                realtimeInput: {
+                  audio: {
+                    data: base64,
+                    mimeType: "audio/pcm;rate=16000",
+                  },
+                },
+              }),
+            );
+          }
+        };
+        source.connect(captureNode);
+
+        nextPlayTimeRef.current = 0;
+      };
+
+      ws.onmessage = handleServerMessage;
+
+      const wsErrorRef = { hadError: false };
+
+      ws.onerror = () => {
+        wsErrorRef.hadError = true;
+      };
+
+      ws.onclose = (event) => {
+        if (!activeRef.current) {
+          return;
+        }
+        if (event.code !== 1000 || wsErrorRef.hadError) {
+          const reason =
+            event.reason ||
+            (event.code === 1006
+              ? "WebSocket connection failed (code 1006). Check the Gemini API key and network."
+              : `Voice connection closed (code ${event.code}).`);
+          setError(reason);
+          onFallbackToText(reason);
+        }
+        cleanup();
+      };
+    } catch (nextError) {
+      if (isAbortError(nextError)) {
+        return;
+      }
+
+      const message = getErrorMessage(nextError);
+      setError(message);
+      onFallbackToText(
+        "Unable to start voice mode. Switching to text mode.",
+      );
+      cleanup();
+    }
+  }, [sessionId, onFallbackToText, cleanup, handleServerMessage]);
+
+  const disconnect = useCallback(() => {
+    cleanup();
+    setTranscripts([]);
+    transcriptHistoryRef.current = [];
+  }, [cleanup]);
+
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
+  useEffect(() => {
+    cleanup();
+    setTranscripts([]);
+    setError(null);
+    transcriptHistoryRef.current = [];
+  }, [sessionId, cleanup]);
+
+  return {
+    connect,
+    disconnect,
+    isConnected,
+    isConnecting,
+    error,
+    transcripts,
+  };
+}

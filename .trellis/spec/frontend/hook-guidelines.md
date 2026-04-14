@@ -83,6 +83,15 @@ function useChat(sessionId: string) {
 - **Key detail**: `sendFeedback()` is async and returns the updated persona so the page coordinator can immediately trigger a recommendation refresh.
 - **Session contract**: Reset to `EMPTY_PERSONA` plus cleared error/submitting state whenever `sessionId` changes.
 
+### useVoiceChat (`src/hooks/useVoiceChat.ts`)
+
+- **Params**: `sessionId: string | null`, `options: { onPersonaUpdate, onRecommendationsUpdate, onFallbackToText }`
+- **Returns**: `UseVoiceChatReturn { connect, disconnect, isConnected, isConnecting, error, transcripts }`
+- **Pattern**: Manages Gemini Live WebSocket connection with bidirectional PCM audio streaming. Uses AudioWorklet processor (`/worklets/pcm-processor.js`) for mic capture (16kHz Int16→base64). Playback uses `AudioBufferSourceNode` scheduling at 24kHz (Int16→Float32→AudioBuffer). Fetches ephemeral tokens via `fetchVoiceToken()` before connecting. WebSocket uses `binaryType = "arraybuffer"` with synchronous `TextDecoder` for message parsing.
+- **Key detail**: Transcript accumulation uses refs (`userTranscriptRef`, `assistantTranscriptRef`) flushed on `turnComplete` events, then sent to backend via `postVoiceTranscript()`. Backend persona/recommendation updates are propagated through callbacks.
+- **Fallback contract**: On mic permission denied, WebSocket error, or token fetch failure, calls `onFallbackToText(reason)` with a user-friendly message and cleans up all audio/WebSocket resources.
+- **Session contract**: Disconnects and resets transcripts/error state on `sessionId` changes. Cleanup on unmount closes WebSocket, stops mic tracks, and closes audio contexts.
+
 ### useSessionId (`src/hooks/useSessionId.ts`)
 
 - **Returns**: `UseSessionIdReturn { sessionId, isReady, startNewSession }`
@@ -94,8 +103,8 @@ function useChat(sessionId: string) {
 ## Data Fetching
 
 - **SSE streaming** (chat responses): `lib/sse.ts` exports `streamChat()` -- accepts a full `ChatRequest`, an `onEvent` callback typed as `(event: ChatEvent) => void`, and an optional `AbortSignal`
-- **REST calls** (recommendations, feedback, restore): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`, `fetchSessionSnapshot()`
-- **No data fetching library for MVP** -- plain fetch is sufficient for 3 endpoints. Add React Query if complexity grows.
+- **REST calls** (recommendations, feedback, restore, voice): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`, `fetchSessionSnapshot()`, `fetchVoiceToken()`, `postVoiceTranscript()`
+- **No data fetching library for MVP** -- plain fetch is sufficient for the current endpoints. Add React Query if complexity grows.
 
 **API client signatures** from `src/lib/api.ts`:
 ```tsx
@@ -120,6 +129,16 @@ export async function fetchSessionSnapshot(
   _sessionId: string,
   _signal?: AbortSignal,
 ): Promise<SessionSnapshot> { ... }
+
+export async function fetchVoiceToken(
+  _signal?: AbortSignal,
+): Promise<VoiceTokenResponse> { ... }
+
+export async function postVoiceTranscript(
+  _sessionId: string,
+  _messages: TranscriptMessage[],
+  _signal?: AbortSignal,
+): Promise<TranscriptResponse> { ... }
 ```
 
 **SSE helper** from `src/lib/sse.ts`:
@@ -174,5 +193,6 @@ export async function streamChat(
 | Hook with EMPTY constant init | `src/hooks/usePersona.ts` |
 | Session-backed recommendation refresh | `src/hooks/useRecommendations.ts` |
 | Browser-persisted session ID | `src/hooks/useSessionId.ts` |
+| Voice WebSocket + audio pipeline | `src/hooks/useVoiceChat.ts` |
 | Typed API clients (fetch wrappers) | `src/lib/api.ts` |
 | SSE streaming helper | `src/lib/sse.ts` |

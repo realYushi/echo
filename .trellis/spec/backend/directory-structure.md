@@ -24,13 +24,15 @@ backend/
 │   │   ├── __init__.py
 │   │   ├── chat.py          # POST /api/chat (SSE streaming)
 │   │   ├── recommend.py     # POST /api/recommend
-│   │   └── feedback.py      # POST /api/feedback
+│   │   ├── feedback.py      # POST /api/feedback
+│   │   └── voice.py         # POST /api/voice/token, POST /api/voice/transcript
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── persona.py       # Persona extraction + embedding (extract_persona, embed_persona)
 │   │   ├── recommendation.py # Qdrant retrieval + scoring (get_recommendations)
 │   │   ├── catalog.py       # Product catalog operations (seed_catalog, get_product)
-│   │   └── session.py       # In-memory session store (get_session, save_session)
+│   │   ├── session.py       # In-memory session store (get_session, save_session)
+│   │   └── voice.py         # Gemini ephemeral token creation (create_ephemeral_token)
 │   ├── agent/
 │   │   ├── __init__.py
 │   │   ├── graph.py         # LangGraph 6-node agent definition (build_graph)
@@ -43,7 +45,8 @@ backend/
 │   │   ├── base.py          # CamelModel base class (camelCase alias_generator)
 │   │   ├── chat.py          # ChatRequest
 │   │   ├── persona.py       # Persona
-│   │   └── product.py       # Product, Recommendation, FeedbackRequest, RecommendRequest
+│   │   ├── product.py       # Product, Recommendation, FeedbackRequest, RecommendRequest
+│   │   └── voice.py         # VoiceTokenResponse, TranscriptRequest, TranscriptResponse
 │   ├── data/
 │   │   ├── __init__.py
 │   │   └── products.py      # Seed data (SEED_PRODUCTS list of Product instances)
@@ -126,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, prefix="/api")
     app.include_router(recommend.router, prefix="/api")
     app.include_router(feedback.router, prefix="/api")
+    app.include_router(voice.router, prefix="/api")
 
     return app
 

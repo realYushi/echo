@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "products"
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_live_model: str = "gemini-3.1-flash-live-preview"
     anthropic_model: str = "claude-3-5-sonnet-latest"
-    anthropic_post_process_model: str = "claude-haiku-4-20250414"
+    anthropic_post_process_model: str = "claude-haiku-4-5-20251001"
     clip_model: str = "ViT-B-32"
     recommendation_limit: int = 6
     recommendation_score_threshold: float = 0.45

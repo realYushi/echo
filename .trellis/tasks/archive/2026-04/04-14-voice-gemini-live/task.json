@@ -1,0 +1,53 @@
+{
+  "id": "voice-gemini-live",
+  "name": "voice-gemini-live",
+  "title": "Voice conversation with Gemini Live API",
+  "description": "",
+  "status": "completed",
+  "dev_type": "fullstack",
+  "scope": "backend/app/routers/voice.py backend/app/services/voice.py frontend/src/hooks/useVoiceChat.ts frontend/src/components/chat/",
+  "package": null,
+  "priority": "P2",
+  "creator": "Yushi Cui",
+  "assignee": "Yushi Cui",
+  "createdAt": "2026-04-14",
+  "completedAt": "2026-04-14",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 3,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "brainstorm"
+    },
+    {
+      "phase": 2,
+      "action": "research"
+    },
+    {
+      "phase": 3,
+      "action": "implement"
+    },
+    {
+      "phase": 4,
+      "action": "check"
+    },
+    {
+      "phase": 5,
+      "action": "update-spec"
+    },
+    {
+      "phase": 6,
+      "action": "record-session"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
