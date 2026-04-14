@@ -29,6 +29,7 @@ class AgentState(TypedDict, total=False):
     recommendations: list[Recommendation]
     session_id: str
     assistant_message: str
+    suggestions: list[str]
     pending_feedback: PendingFeedback | None
 ```
 
@@ -69,6 +70,15 @@ def persona_signal_count(persona: Persona) -> int
 
 
 def apply_feedback(persona: Persona, product: Product, signal: str) -> Persona
+
+
+def build_anthropic_messages(messages: list[dict[str, str]]) -> list[MessageParam]
+
+
+def extract_json_object(raw_text: str) -> dict[str, object]
+
+
+def anthropic_response_text(content_blocks: object) -> str
 ```
 
 #### Dependency And Settings Contracts
@@ -94,7 +104,7 @@ class Settings(BaseSettings):
 
 - The graph order is fixed: `greet -> discover -> extract_persona -> embed_persona -> recommend -> feedback`.
 - `run_agent_turn()` must call the compiled graph with `config={"configurable": {"thread_id": state["session_id"]}}`.
-- `run_agent_turn()` resets `assistant_message` to `""` before invocation so each turn can decide whether a new assistant reply should be generated.
+- `run_agent_turn()` resets `assistant_message` to `""` and `suggestions` to `[]` before invocation so each turn starts clean.
 
 #### Checkpointing Contract
 
@@ -105,8 +115,11 @@ class Settings(BaseSettings):
 
 #### Agent Node Behavior
 
-- `greet()` only appends an assistant message when the existing message history contains no assistant message.
-- `discover()` is a no-op when `assistant_message` is already populated in the current turn.
+- `greet()` only appends an assistant message when the existing message history contains no assistant message. Returns `(content, suggestions)` via `_append_assistant_message()`.
+- `discover()` is a no-op when `assistant_message` is already populated in the current turn. Returns `(content, suggestions)` via `_append_assistant_message()`.
+- Both `greet()` and `discover()` perform incremental persona merging via `_persona_for_discovery()` which calls `extract_persona()` then `_merge_personas()` to build a latest persona snapshot before generating replies.
+- Discovery replies use Claude's multi-turn message format via `build_anthropic_messages()` and return structured JSON `{"reply": string, "suggestions": string[]}`.
+- When Claude is unavailable or fails, `_fallback_discovery_reply()` returns deterministic replies and `_fallback_suggestions()` based on persona completeness stage.
 - `extract_persona()` always writes `state["persona"]`.
 - `embed_persona()` returns `persona_embedding=[]` when there is no persona or `persona_signal_count(persona) == 0`.
 - `recommend()` returns `recommendations=[]` when either of these is true:
@@ -125,6 +138,8 @@ class Settings(BaseSettings):
   - `project_type`
   - `budget_tier`
   - `role`
+  - `likes`
+  - `hates`
   - `style_preferences`
   - `material_preferences`
   - `categories`
@@ -134,8 +149,15 @@ class Settings(BaseSettings):
 #### Persona Embedding Contract
 
 - `persona_to_text()` is the only supported transformation from structured persona to embedding input text.
+- `persona_to_text()` renders `likes` and `hates` first, before project_type, role, budget, categories, styles, materials, approvals, and rejections. This ordering makes taste descriptors the primary embedding signal.
 - `embed_persona()` uses CLIP text embeddings on the rendered persona summary, not raw JSON.
 - Empty or early-stage personas must still render to a stable fallback sentence instead of an empty string.
+
+#### Utility Function Contracts
+
+- `build_anthropic_messages()` normalizes message dicts into Claude `MessageParam` format: filters to `user`/`assistant` roles only, strips empty content, and merges consecutive same-role messages with `\n\n` separator.
+- `extract_json_object()` extracts the first JSON object (`{...}`) from Claude's raw text response via regex, raises `ValueError` if absent or not a dict.
+- `anthropic_response_text()` extracts text from Claude `ContentBlock` lists by concatenating blocks where `type == "text"`.
 
 #### Feedback Contract
 
@@ -143,8 +165,8 @@ class Settings(BaseSettings):
 - `apply_feedback()` mutates a copied persona, never the input model in place.
 - Feedback always adds `product.category` into `persona.categories` if missing.
 - Style and material enrichment comes from `product.tags` intersected with the known keyword sets.
-- Positive feedback appends `product.name` to `approvals`; negative feedback appends it to `rejections`.
-- Deduplication must preserve order across categories, style preferences, material preferences, approvals, and rejections.
+- Positive feedback appends `product.name` to `approvals` and product tags/name to `likes`; negative feedback appends `product.name` to `rejections` and product tags/name to `hates`.
+- Deduplication must preserve order across categories, style preferences, material preferences, approvals, rejections, likes, and hates.
 
 #### Runtime Annotation Contract
 
@@ -200,12 +222,14 @@ class Settings(BaseSettings):
 ### 6. Tests Required
 
 - `tests/test_persona.py`
-  - Assert heuristic extraction populates project and category signals when Anthropic is missing.
-  - Assert `embed_persona()` renders the textual summary before CLIP embedding.
-  - Assert `apply_feedback()` merges category/tag/product-name signals.
+  - Assert heuristic extraction populates project, category, likes, and hates signals when Anthropic is missing.
+  - Assert `embed_persona()` renders likes and hates first in the textual summary before CLIP embedding.
+  - Assert `apply_feedback()` merges category/tag/product-name signals into approvals/rejections and likes/hates.
+  - Assert `_normalize_persona_signals()` moves negated materials/styles from `likes` into `hates`.
 - `tests/test_agent_graph.py`
-  - Assert `run_agent_turn()` produces a persona, appends one assistant message, and returns recommendations for a valid high-signal turn.
+  - Assert `run_agent_turn()` produces a persona, appends one assistant message, returns suggestions, and returns recommendations for a valid high-signal turn.
   - Assert feedback updates persona approvals, clears `pending_feedback`, and refreshes recommendations.
+  - Assert fallback discovery replies produce both content and suggestions.
 - When adding new state fields:
   - Add at least one graph test proving the field survives a full `run_agent_turn()` invocation.
 - When changing thresholds or fallback behavior:
@@ -277,6 +301,35 @@ async def extract_persona(
 - Makes failure behavior explicit and testable.
 
 **Consequence**: Recommendation quality may be lower without Anthropic, but the user flow should remain operable.
+
+---
+
+## Design Decision: Likes/Hates As Primary Embedding Signal
+
+**Context**: The persona schema had styles, materials, approvals, and rejections, but these are implementation-level attributes. The recommendation embedding needed a higher-level taste signal.
+
+**Decision**: Added `likes` and `hates` fields to `Persona`. These are Claude-synthesized (or heuristically derived) compact taste descriptors. `persona_to_text()` renders them first in the embedding prompt, making them the dominant embedding signal.
+
+**Why**:
+- Taste descriptors like "warm and natural" carry more semantic weight for CLIP embeddings than raw style/material keywords.
+- `likes`/`hates` accumulate from both conversation extraction and product feedback, creating a unified taste signal.
+- Rendering them first in the embedding prompt ensures they dominate the CLIP vector space direction.
+
+**Consequence**: Old personas without `likes`/`hates` remain valid (both default to `[]`) and fall back to the prior embedding behavior using styles/materials.
+
+---
+
+## Design Decision: Structured Discovery Reply With Suggestions
+
+**Context**: Discovery replies were plain text strings. Suggestion bubbles needed to be generated alongside the reply.
+
+**Decision**: Discovery nodes return `(content, suggestions)` tuples. Claude returns `{"reply": string, "suggestions": string[]}` JSON. The `suggestions` field flows through `AgentState`, an SSE event, and into the frontend `SuggestionBubbles` component.
+
+**Why**:
+- Co-generating reply + suggestions in one Claude call is cheaper and more contextually coherent than a separate call.
+- Fallback suggestions are deterministic per persona completeness stage, so no API is needed for graceful degradation.
+
+**Consequence**: All discovery reply paths (Claude, fallback, greeting) must produce both content and suggestions. The SSE event stream includes a `suggestions` event between `token` and `persona_update`.
 
 ---
 
@@ -369,6 +422,7 @@ The chat endpoint streams `text/event-stream` with this exact format:
 
 ```
 data: {"type": "token", "content": "<assistant message text>"}\n\n
+data: {"type": "suggestions", "suggestions": ["...", "...", "..."]}\n\n
 data: {"type": "persona_update", "persona": {<camelCase Persona>}}\n\n
 data: {"type": "done"}\n\n
 ```
@@ -385,6 +439,7 @@ Frontend expects these types (from `frontend/src/types/chat.ts`):
 ```typescript
 export type ChatEvent =
   | { type: "token"; content: string }
+  | { type: "suggestions"; suggestions: string[] }
   | { type: "persona_update"; persona: Persona }
   | { type: "done" }
   | { type: "error"; message: string };

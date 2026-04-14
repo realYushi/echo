@@ -19,6 +19,7 @@ One hook per concern. Hooks return typed objects (not arrays). Every hook define
 ```tsx
 interface UseChatReturn {
   messages: Message[];
+  suggestions: string[];
   replaceMessages: (messages: Message[]) => void;
   sendMessage: (content: string) => Promise<void>;
   isStreaming: boolean;
@@ -42,7 +43,7 @@ export function useChat(_sessionId: string, _options: UseChatOptions): UseChatRe
     // ... streaming logic
   }, []);
 
-  return { messages, replaceMessages, sendMessage, isStreaming, error };
+  return { messages, suggestions, replaceMessages, sendMessage, isStreaming, error };
 }
 ```
 
@@ -61,10 +62,11 @@ function useChat(sessionId: string) {
 ### useChat (`src/hooks/useChat.ts`)
 
 - **Params**: `sessionId: string`, `options: { persona, onPersonaUpdate, onTurnComplete? }`
-- **Returns**: `UseChatReturn { messages, replaceMessages, sendMessage, isStreaming, error }`
-- **Pattern**: Wraps `useState` + `useCallback`. Appends the user message optimistically, streams SSE events through `lib/sse.ts`, appends assistant content incrementally, and hands persona updates back to the page coordinator.
+- **Returns**: `UseChatReturn { messages, suggestions, replaceMessages, sendMessage, isStreaming, error }`
+- **Pattern**: Wraps `useState` + `useCallback`. Appends the user message optimistically, streams SSE events through `lib/sse.ts`, appends assistant content incrementally, processes `suggestions` events into local state, and hands persona updates back to the page coordinator.
 - **Key detail**: Uses stable `Message.id` keys plus functional `setMessages((prev) => ...)` updates so streamed assistant content never closes over stale state.
-- **Session contract**: Reset local message/error/streaming state on `sessionId` changes, and expose `replaceMessages()` so the page coordinator can hydrate restored history from the backend snapshot.
+- **Suggestions lifecycle**: Suggestions are cleared on new message send and on error. Reset on `sessionId` change. Set from the `suggestions` SSE event.
+- **Session contract**: Reset local message/suggestion/error/streaming state on `sessionId` changes, and expose `replaceMessages()` so the page coordinator can hydrate restored history from the backend snapshot.
 
 ### useRecommendations (`src/hooks/useRecommendations.ts`)
 

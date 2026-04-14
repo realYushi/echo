@@ -92,13 +92,26 @@ export function ProductCard({ product, score, onFeedback, disabled }: ProductCar
 
 **Actual examples**:
 
-`src/components/chat/ChatPanelProps` (`ChatPanel.tsx:7-11`):
+`src/components/chat/ChatPanelProps` (`ChatPanel.tsx:10-19`):
 ```tsx
 interface ChatPanelProps {
   messages: Message[];
+  suggestions: string[];
   onSend: (message: string) => Promise<void> | void;
+  onSuggestionSelect: (message: string) => Promise<void> | void;
   isStreaming: boolean;
+  inputDisabled?: boolean;
+  statusLabel?: string;
   error: string | null;
+}
+```
+
+`src/components/chat/SuggestionBubbles.tsx:5-9`:
+```tsx
+interface SuggestionBubblesProps {
+  suggestions: string[];
+  onSelect: (suggestion: string) => Promise<void> | void;
+  disabled: boolean;
 }
 ```
 
@@ -239,8 +252,8 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 - Images require `alt` text (see `ProductCard.tsx:18`)
 - Recommendation feedback buttons should remain explicit `type="button"` controls even when rendered near form-based chat inputs
 - Form inputs require associated labels or descriptive placeholders (see `ChatInput.tsx:30`)
-- Focus management for the chat input after message send
-- `ChatInput` uses a `<form>` with `onSubmit` so Enter key works natively (`ChatInput.tsx:14`)
+- Focus management for the chat input after message send and after streaming ends (`ChatInput` uses `useRef` + `useEffect(disabled)` to restore focus when streaming completes)
+- `ChatInput` uses a `<form>` with `onSubmit` so Enter key works natively (`ChatInput.tsx:21`)
 
 ---
 
@@ -262,8 +275,9 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 |---------|------|
 | UI primitive with variants | `src/components/ui/Button.tsx` |
 | Feature container with composition | `src/components/chat/ChatPanel.tsx` |
+| Suggestion quick-reply bubbles | `src/components/chat/SuggestionBubbles.tsx` |
 | Conditional styling with cn() | `src/components/chat/MessageBubble.tsx` |
-| Form with controlled input | `src/components/chat/ChatInput.tsx` |
+| Form with controlled input + focus restore | `src/components/chat/ChatInput.tsx` |
 | Feedback callback pattern | `src/components/recommendations/ProductCard.tsx` |
 | Loading/empty/populated states | `src/components/recommendations/RecommendationGrid.tsx` |
 | Empty state component | `src/components/recommendations/EmptyState.tsx` |

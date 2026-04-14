@@ -51,6 +51,7 @@ export interface ChatRequest {
 
 export const ChatEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("token"), content: z.string() }),
+  z.object({ type: z.literal("suggestions"), suggestions: z.array(z.string()) }),
   z.object({ type: z.literal("persona_update"), persona: PersonaSchema }),
   z.object({ type: z.literal("done") }),
   z.object({ type: z.literal("error"), message: z.string() }),
@@ -68,6 +69,8 @@ export const PersonaSchema = z.object({
   projectType: z.string().nullable(),
   budgetTier: z.string().nullable(),
   role: z.string().nullable(),
+  likes: z.array(z.string()),
+  hates: z.array(z.string()),
   stylePreferences: z.array(z.string()),
   materialPreferences: z.array(z.string()),
   categories: z.array(z.string()),
@@ -85,6 +88,8 @@ export const EMPTY_PERSONA: Persona = {
   projectType: null,
   budgetTier: null,
   role: null,
+  likes: [],
+  hates: [],
   stylePreferences: [],
   materialPreferences: [],
   categories: [],
@@ -144,11 +149,12 @@ export async function fetchRecommendations(sessionId: string, personaEmbedding?:
 
 ### Discriminated unions for event types
 
-`ChatEvent` in `src/types/chat.ts:14-18` uses a discriminated union on the `type` field. This enables exhaustive switch matching and narrows the type inside each branch.
+`ChatEvent` in `src/types/chat.ts:16-36` uses a discriminated union on the `type` field. This enables exhaustive switch matching and narrows the type inside each branch.
 
 ```tsx
 export const ChatEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("token"), content: z.string() }),
+  z.object({ type: z.literal("suggestions"), suggestions: z.array(z.string()) }),
   z.object({ type: z.literal("persona_update"), persona: PersonaSchema }),
   z.object({ type: z.literal("done") }),
   z.object({ type: z.literal("error"), message: z.string() }),

@@ -87,7 +87,8 @@ Key details:
 - Hydration fetches `GET /api/sessions/{sessionId}` on first load and after `startNewSession()` rotates to a fresh ID
 - Each hook owns its slice of state (`chat` owns messages/streaming, `persona` owns the taste profile, `recommendations` owns products/loading)
 - Hooks must clear their local state when `sessionId` changes so a newly generated session never shows stale restored data
-- Data flows down via props: `chat.messages` -> `ChatPanel`, `recommendations.products` -> `RecommendationGrid`
+- Data flows down via props: `chat.messages` -> `ChatPanel`, `chat.suggestions` -> `ChatPanel`, `recommendations.products` -> `RecommendationGrid`
+- Suggestions flow: SSE `suggestions` event -> `useChat` state -> `discover/page.tsx` -> `ChatPanel` -> `SuggestionBubbles`. Clicking a suggestion calls `chat.sendMessage` directly via `onSuggestionSelect`.
 - The page coordinates cross-hook effects: snapshot restore seeds local state; chat turn completes -> refresh recommendations; feedback saves persona -> refresh recommendations
 
 ---
@@ -144,3 +145,4 @@ const filteredProducts = products.filter(...);
 | Feature state hook (recommendations) | `src/hooks/useRecommendations.ts` |
 | Session ID persistence | `src/hooks/useSessionId.ts` |
 | Component-local state (input) | `src/components/chat/ChatInput.tsx` |
+| Suggestion quick-reply flow | `src/components/chat/SuggestionBubbles.tsx` |
