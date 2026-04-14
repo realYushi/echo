@@ -34,7 +34,8 @@ frontend/
 │   ├── hooks/
 │   │   ├── useChat.ts             # Chat message state + SSE streaming
 │   │   ├── usePersona.ts          # Persona state + feedback mutation handling
-│   │   └── useRecommendations.ts  # Session-backed recommendation refresh
+│   │   ├── useRecommendations.ts  # Session-backed recommendation refresh
+│   │   └── useVoiceChat.ts        # Gemini Live WebSocket + audio capture/playback
 │   ├── lib/
 │   │   ├── utils.ts               # cn() helper (clsx + tailwind-merge)
 │   │   ├── api.ts                 # Typed fetch clients (postChat, postFeedback, fetchRecommendations)
@@ -42,10 +43,13 @@ frontend/
 │   ├── types/
 │   │   ├── chat.ts                # Message, ChatRequest, ChatEventSchema
 │   │   ├── persona.ts             # PersonaSchema, FeedbackSignalSchema, EMPTY_PERSONA
-│   │   └── product.ts             # ProductSchema, RecommendationSchema
+│   │   ├── product.ts             # ProductSchema, RecommendationSchema
+│   │   └── voice.ts               # VoiceTokenResponseSchema, TranscriptMessageSchema, TranscriptResponseSchema
 │   └── styles/
 │       └── globals.css            # Tailwind v4 import + body defaults
 ├── public/
+│   └── worklets/
+│       └── pcm-processor.js       # AudioWorklet for PCM capture (16kHz) + playback (24kHz)
 ├── next.config.ts                 # API proxy rewrites + remote image config
 ├── tsconfig.json                  # Strict mode, @/* path alias
 ├── eslint.config.mjs              # ESLint 9 flat config (next/core-web-vitals + next/typescript)

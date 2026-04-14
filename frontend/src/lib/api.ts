@@ -7,6 +7,13 @@ import {
 } from "@/types/persona";
 import { RecommendationSchema, type Recommendation } from "@/types/product";
 import { SessionSnapshotSchema, type SessionSnapshot } from "@/types/session";
+import {
+  VoiceTokenResponseSchema,
+  TranscriptResponseSchema,
+  type VoiceTokenResponse,
+  type TranscriptMessage,
+  type TranscriptResponse,
+} from "@/types/voice";
 
 const ApiErrorSchema = z.object({
   error: z.object({
@@ -121,4 +128,42 @@ export async function fetchSessionSnapshot(
 
   const data = await response.json();
   return SessionSnapshotSchema.parse(data);
+}
+
+export async function fetchVoiceToken(
+  signal?: AbortSignal,
+): Promise<VoiceTokenResponse> {
+  const response = await fetch("/api/voice/token", {
+    method: "POST",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  const data = await response.json();
+  return VoiceTokenResponseSchema.parse(data);
+}
+
+export async function postVoiceTranscript(
+  sessionId: string,
+  messages: TranscriptMessage[],
+  signal?: AbortSignal,
+): Promise<TranscriptResponse> {
+  const response = await fetch("/api/voice/transcript", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ sessionId, messages }),
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  const data = await response.json();
+  return TranscriptResponseSchema.parse(data);
 }
