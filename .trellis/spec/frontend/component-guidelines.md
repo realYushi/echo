@@ -92,7 +92,7 @@ export function ProductCard({ product, score, onFeedback, disabled }: ProductCar
 
 **Actual examples**:
 
-`src/components/chat/ChatPanelProps` (`ChatPanel.tsx:10-19`):
+`src/components/chat/ChatPanelProps` (`ChatPanel.tsx:10-21`):
 ```tsx
 interface ChatPanelProps {
   messages: Message[];
@@ -103,6 +103,8 @@ interface ChatPanelProps {
   inputDisabled?: boolean;
   statusLabel?: string;
   error: string | null;
+  mode?: "text" | "voice";
+  voiceSlot?: ReactNode;
 }
 ```
 
@@ -274,7 +276,8 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 | Pattern | File |
 |---------|------|
 | UI primitive with variants | `src/components/ui/Button.tsx` |
-| Feature container with composition | `src/components/chat/ChatPanel.tsx` |
+| Feature container with composition + mode slot | `src/components/chat/ChatPanel.tsx` |
+| Voice mic button with connection states | `src/components/chat/VoiceControls.tsx` |
 | Suggestion quick-reply bubbles | `src/components/chat/SuggestionBubbles.tsx` |
 | Conditional styling with cn() | `src/components/chat/MessageBubble.tsx` |
 | Form with controlled input + focus restore | `src/components/chat/ChatInput.tsx` |

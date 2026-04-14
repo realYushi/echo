@@ -1,16 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { VoiceControls } from "@/components/chat/VoiceControls";
 import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
 import { Button } from "@/components/ui/Button";
 import { useChat } from "@/hooks/useChat";
 import { usePersona } from "@/hooks/usePersona";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { useSessionId } from "@/hooks/useSessionId";
+import { useVoiceChat } from "@/hooks/useVoiceChat";
 import { fetchSessionSnapshot } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type { Message } from "@/types/chat";
 import { EMPTY_PERSONA } from "@/types/persona";
+import type { Recommendation } from "@/types/product";
 
 function createHydratedMessageId(index: number, role: Message["role"]): string {
   return `restored-${role}-${index}-${crypto.randomUUID()}`;
@@ -32,6 +36,10 @@ export default function DiscoverPage() {
   const { sessionId, isReady, startNewSession } = useSessionId();
   const [isHydrating, setIsHydrating] = useState(false);
   const [hydrationError, setHydrationError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"text" | "voice">("text");
+  const [voiceFallbackError, setVoiceFallbackError] = useState<string | null>(
+    null,
+  );
   const resolvedSessionId = sessionId ?? "";
 
   const persona = usePersona(resolvedSessionId);
@@ -46,6 +54,24 @@ export default function DiscoverPage() {
   const replaceMessages = chat.replaceMessages;
   const setPersona = persona.setPersona;
   const setRecommendations = recommendations.setRecommendations;
+
+  const handleFallbackToText = useCallback((reason: string) => {
+    setMode("text");
+    setVoiceFallbackError(reason);
+  }, []);
+
+  const handleVoiceRecommendationsUpdate = useCallback(
+    (recs: Recommendation[]) => {
+      setRecommendations(recs);
+    },
+    [setRecommendations],
+  );
+
+  const voice = useVoiceChat(sessionId, {
+    onPersonaUpdate: persona.setPersona,
+    onRecommendationsUpdate: handleVoiceRecommendationsUpdate,
+    onFallbackToText: handleFallbackToText,
+  });
 
   useEffect(() => {
     if (!sessionId) {
@@ -103,6 +129,20 @@ export default function DiscoverPage() {
   const hatesSignals = persona.persona.hates;
   const hasConversation = chat.messages.length > 0;
 
+  function handleModeChange(nextMode: "text" | "voice") {
+    if (nextMode === mode) return;
+
+    setVoiceFallbackError(null);
+
+    if (nextMode === "voice") {
+      setMode("voice");
+      void voice.connect();
+    } else {
+      voice.disconnect();
+      setMode("text");
+    }
+  }
+
   async function handleFeedback(productId: string, signal: "like" | "dislike") {
     const updatedPersona = await persona.sendFeedback(productId, signal);
     if (updatedPersona) {
@@ -133,6 +173,32 @@ export default function DiscoverPage() {
             <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-3 py-2">
               {recommendations.products.length} live picks
             </span>
+            <div className="flex overflow-hidden rounded-full border border-[color:var(--line)] bg-white/80">
+              <button
+                type="button"
+                onClick={() => handleModeChange("text")}
+                className={cn(
+                  "px-3 py-2 text-[11px] tracking-[0.16em] uppercase transition-colors",
+                  mode === "text"
+                    ? "bg-[color:var(--ink)] text-white"
+                    : "text-[color:var(--muted)] hover:bg-[color:var(--accent-soft)]/40",
+                )}
+              >
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange("voice")}
+                className={cn(
+                  "px-3 py-2 text-[11px] tracking-[0.16em] uppercase transition-colors",
+                  mode === "voice"
+                    ? "bg-[color:var(--ink)] text-white"
+                    : "text-[color:var(--muted)] hover:bg-[color:var(--accent-soft)]/40",
+                )}
+              >
+                Voice
+              </button>
+            </div>
             <Button
               variant="secondary"
               className="rounded-full border-[color:var(--line)] bg-white/80 px-3 py-2 text-[11px] tracking-[0.16em] uppercase"
@@ -147,16 +213,33 @@ export default function DiscoverPage() {
           <div className="sticky top-4 z-10 self-start">
             <section className="h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden rounded-[32px] border border-[color:var(--line)] bg-[color:var(--panel)]/92 shadow-[0_28px_80px_rgba(29,42,34,0.1)] backdrop-blur-sm xl:h-[calc(100vh-8rem)] xl:max-h-[calc(100vh-8rem)]">
               <ChatPanel
-                messages={chat.messages}
-                suggestions={chat.suggestions}
+                messages={mode === "voice" ? voice.transcripts : chat.messages}
+                suggestions={mode === "voice" ? [] : chat.suggestions}
                 onSend={chat.sendMessage}
                 onSuggestionSelect={chat.sendMessage}
                 isStreaming={chat.isStreaming}
                 inputDisabled={!isReady || isHydrating || chat.isStreaming}
                 statusLabel={
-                  !isReady ? "Loading" : isHydrating ? "Restoring" : undefined
+                  !isReady
+                    ? "Loading"
+                    : isHydrating
+                      ? "Restoring"
+                      : undefined
                 }
-                error={chat.error ?? hydrationError}
+                error={
+                  mode === "voice"
+                    ? voice.error ?? voiceFallbackError
+                    : chat.error ?? hydrationError
+                }
+                mode={mode}
+                voiceSlot={
+                  <VoiceControls
+                    isConnected={voice.isConnected}
+                    isConnecting={voice.isConnecting}
+                    onConnect={() => void voice.connect()}
+                    onDisconnect={voice.disconnect}
+                  />
+                }
               />
             </section>
           </div>

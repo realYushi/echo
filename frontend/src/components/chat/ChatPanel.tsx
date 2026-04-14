@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import type { Message } from "@/types/chat";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -16,6 +16,8 @@ interface ChatPanelProps {
   inputDisabled?: boolean;
   statusLabel?: string;
   error: string | null;
+  mode?: "text" | "voice";
+  voiceSlot?: ReactNode;
 }
 
 export function ChatPanel({
@@ -27,6 +29,8 @@ export function ChatPanel({
   inputDisabled,
   statusLabel,
   error,
+  mode = "text",
+  voiceSlot,
 }: ChatPanelProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -53,17 +57,32 @@ export function ChatPanel({
           <span
             className={cn(
               "rounded-full border px-3 py-1 text-[11px] font-medium tracking-[0.18em] uppercase",
-              isStreaming
+              isStreaming || mode === "voice"
                 ? "border-[color:var(--accent)]/30 bg-[color:var(--accent)]/10 text-[color:var(--accent)]"
                 : "border-[color:var(--line)] bg-white/80 text-[color:var(--muted)]",
             )}
           >
-            {statusLabel ?? (isStreaming ? "Responding" : "Ready")}
+            {statusLabel ??
+              (mode === "voice"
+                ? "Voice"
+                : isStreaming
+                  ? "Responding"
+                  : "Ready")}
           </span>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-        {messages.length === 0 ? (
+        {messages.length === 0 && mode === "voice" ? (
+          <div className="rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/55 p-6 text-[color:var(--muted)]">
+            <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
+              Voice discovery
+            </p>
+            <p className="mt-4 text-sm leading-6">
+              Tap the microphone below to start a voice conversation with Echo.
+              Your words will appear here as the conversation flows.
+            </p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/55 p-6 text-[color:var(--muted)]">
             <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
               Try prompts like
@@ -99,12 +118,18 @@ export function ChatPanel({
 
         <div ref={endRef} />
       </div>
-      <SuggestionBubbles
-        suggestions={suggestions}
-        onSelect={onSuggestionSelect}
-        disabled={inputDisabled ?? isStreaming}
-      />
-      <ChatInput onSend={onSend} disabled={inputDisabled ?? isStreaming} />
+      {mode === "voice" ? (
+        voiceSlot
+      ) : (
+        <>
+          <SuggestionBubbles
+            suggestions={suggestions}
+            onSelect={onSuggestionSelect}
+            disabled={inputDisabled ?? isStreaming}
+          />
+          <ChatInput onSend={onSend} disabled={inputDisabled ?? isStreaming} />
+        </>
+      )}
     </div>
   );
 }
