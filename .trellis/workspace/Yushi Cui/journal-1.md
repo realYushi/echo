@@ -334,3 +334,59 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Natural chatbot UI fixes and heuristic persona improvements
+
+**Date**: 2026-04-14
+**Task**: Natural chatbot UI fixes and heuristic persona improvements
+**Branch**: `task/natural-chatbot`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Changes
+
+| Area | Description |
+|------|-------------|
+| Chat UI | Made chat panel sticky across all breakpoints (fixed `overflow-x-clip` bug) |
+| Discovery replies | Converted to Claude multi-turn format with JSON response (reply + suggestions) |
+| Suggestion bubbles | New `SuggestionBubbles` component wired through SSE |
+| Persona schema | Added `likes`/`hates` fields for Claude-synthesized taste descriptors |
+| Taste profile UI | Restructured to "What it is like" / "What it is not like" using `likes`/`hates` |
+| Heuristic extraction | Expanded keyword dictionaries (furniture, styles, materials, colors) |
+| Cue-phrase extraction | Segment-aware splitting, negation detection, context-window propagation |
+| Discovery persona | `_persona_for_discovery` now passes Claude client instead of heuristic-only |
+
+## Key Files
+- `backend/app/agent/nodes.py` — Claude discovery reply, persona merging, suggestions
+- `backend/app/services/persona.py` — Heuristic improvements, color extraction, segment splitting
+- `backend/app/schemas/persona.py` — Added likes/hates fields
+- `frontend/src/app/discover/page.tsx` — Sticky chat, taste profile restructure
+- `frontend/src/components/chat/SuggestionBubbles.tsx` — New component
+
+## Known Issues
+- Heuristic persona extraction still struggles with complex structured messages (numbered lists, multi-section inputs)
+- User wants a dedicated task focused entirely on persona building logic, leaning more on Claude and less on keyword matching
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2dda6b2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

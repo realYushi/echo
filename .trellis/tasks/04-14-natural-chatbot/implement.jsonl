@@ -1,0 +1,8 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/backend/agent-recommendation-flow.md", "reason": "Core agent flow being modified"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "New SuggestionBubbles component + ChatInput changes"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useChat hook modifications"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Suggestions state management"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "New types for suggestions"}

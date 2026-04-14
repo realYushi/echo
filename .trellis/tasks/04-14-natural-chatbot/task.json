@@ -1,0 +1,53 @@
+{
+  "id": "natural-chatbot",
+  "name": "natural-chatbot",
+  "title": "Natural chatbot with Claude API + likes/hates persona",
+  "description": "Transform discovery chatbot into natural conversation using Claude API with proper multi-turn format. Add likes/hates to persona for embedding. Fix input focus. Add suggestion bubbles.",
+  "status": "in_progress",
+  "dev_type": "fullstack",
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Yushi Cui",
+  "assignee": "Yushi Cui",
+  "createdAt": "2026-04-14",
+  "completedAt": null,
+  "branch": "task/natural-chatbot",
+  "base_branch": "main",
+  "worktree_path": null,
+  "current_phase": 3,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "brainstorm"
+    },
+    {
+      "phase": 2,
+      "action": "research"
+    },
+    {
+      "phase": 3,
+      "action": "implement"
+    },
+    {
+      "phase": 4,
+      "action": "check"
+    },
+    {
+      "phase": 5,
+      "action": "update-spec"
+    },
+    {
+      "phase": 6,
+      "action": "record-session"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
