@@ -11,7 +11,7 @@ from qdrant_client import AsyncQdrantClient
 
 from app.dependencies import get_settings
 from app.exceptions import AppError
-from app.routers import chat, feedback, recommend, session
+from app.routers import chat, feedback, recommend, session, voice
 from app.services.catalog import seed_catalog
 
 if TYPE_CHECKING:
@@ -82,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(recommend.router, prefix="/api")
     app.include_router(feedback.router, prefix="/api")
     app.include_router(session.router, prefix="/api")
+    app.include_router(voice.router, prefix="/api")
 
     return app
 
