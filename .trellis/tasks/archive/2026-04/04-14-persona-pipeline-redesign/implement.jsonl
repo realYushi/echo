@@ -1,0 +1,17 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/backend/agent-recommendation-flow.md", "reason": "Core spec for the agent pipeline being redesigned"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error handling patterns for new post-processor service"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for new pipeline stages"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety for schema migration"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Hook patterns for usePersona update"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer thinking for fullstack schema change"}
+{"file": "backend/app/services/persona.py", "reason": "Main file being rewritten - current extraction logic"}
+{"file": "backend/app/agent/graph.py", "reason": "LangGraph pipeline definition - needs new nodes"}
+{"file": "backend/app/agent/nodes.py", "reason": "Agent node implementations - needs post-processor + builder nodes"}
+{"file": "backend/app/schemas/persona.py", "reason": "Persona schema - simplifying from 10 to 5 fields"}
+{"file": "frontend/src/types/persona.ts", "reason": "Frontend Zod schema - must mirror backend changes"}
+{"file": "frontend/src/hooks/usePersona.ts", "reason": "Persona state hook - update for new schema"}
+{"file": "backend/app/config.py", "reason": "Config - may need new model settings for Haiku post-processor"}
+{"file": "backend/app/routers/chat.py", "reason": "Chat endpoint - persona_update event needs updated schema"}

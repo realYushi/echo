@@ -1,0 +1,5 @@
+{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".claude/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Quality checks for backend changes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality checks for frontend changes"}
+{"file": "backend/tests/test_persona.py", "reason": "Existing persona tests - must update for new schema"}

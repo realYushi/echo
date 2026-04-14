@@ -1,0 +1,53 @@
+{
+  "id": "persona-pipeline-redesign",
+  "name": "persona-pipeline-redesign",
+  "title": "Redesign persona building with post-processing pipeline",
+  "description": "Three-stage persona pipeline (chat → post-process → persona build) with simplified taste-focused schema (5 fields). Post-processor acts as signal-based trigger gate using a lightweight model.",
+  "status": "completed",
+  "dev_type": "fullstack",
+  "scope": "backend/app/services/persona.py backend/app/agent/ backend/app/schemas/persona.py frontend/src/types/persona.ts frontend/src/hooks/usePersona.ts",
+  "package": null,
+  "priority": "P2",
+  "creator": "Yushi Cui",
+  "assignee": "Yushi Cui",
+  "createdAt": "2026-04-14",
+  "completedAt": "2026-04-14",
+  "branch": "feature/persona-pipeline-redesign",
+  "base_branch": "main",
+  "worktree_path": "/Users/yushi/project/trellis-worktrees/feature/persona-pipeline-redesign",
+  "current_phase": 1,
+  "next_action": [
+    {
+      "phase": 1,
+      "action": "brainstorm"
+    },
+    {
+      "phase": 2,
+      "action": "research"
+    },
+    {
+      "phase": 3,
+      "action": "implement"
+    },
+    {
+      "phase": 4,
+      "action": "check"
+    },
+    {
+      "phase": 5,
+      "action": "update-spec"
+    },
+    {
+      "phase": 6,
+      "action": "record-session"
+    }
+  ],
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
