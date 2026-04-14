@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-04-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~441 | Active |
+| `journal-1.md` | ~490 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-04-14 | Three-stage persona pipeline with portable taste profiles | `a2d25ff` | `main` |
 | 8 | 2026-04-14 | Natural chatbot + spec sync | `2dda6b2`, `0ea5504` | `task/natural-chatbot` |
 | 7 | 2026-04-14 | Natural chatbot UI fixes and heuristic persona improvements | `2dda6b2` | `task/natural-chatbot` |
 | 6 | 2026-04-14 | PR6 session resume and integration polish | `f2ffd25` | `main` |

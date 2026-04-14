@@ -439,3 +439,52 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Three-stage persona pipeline with portable taste profiles
+
+**Date**: 2026-04-14
+**Task**: Three-stage persona pipeline with portable taste profiles
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Changes
+
+| Area | Description |
+|------|-------------|
+| Persona Pipeline | Replaced single-step heuristic extraction with three-stage LLM pipeline: (1) Haiku post-processor for signal detection, (2) Sonnet persona builder when new signals exist, (3) embedding |
+| Persona Schema | Simplified from 10 to 5 taste-focused fields, filtering out functional requirements for portable taste profiles |
+| Budget Tier | Constrained budget_tier to budget/mid/premium/null |
+| Frontend | Disabled chat input autocomplete, updated persona types to match new schema |
+| Code Specs | Updated agent-recommendation-flow and quality-guidelines specs |
+
+**Key Files**:
+- `backend/app/services/persona.py` — core pipeline rewrite (592 lines removed, 436 added)
+- `backend/app/agent/nodes.py` — agent integration with new pipeline
+- `backend/app/schemas/persona.py` — simplified schema
+- `frontend/src/types/persona.ts` — frontend type alignment
+- `.trellis/spec/backend/agent-recommendation-flow.md` — spec updates
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a2d25ff` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
