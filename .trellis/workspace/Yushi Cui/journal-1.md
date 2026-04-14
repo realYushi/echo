@@ -488,3 +488,61 @@ PR5: Frontend — split-pane discovery UI + streaming chat + recommendation grid
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Fix Gemini Live WebSocket, audio playback, barge-in, and greeting
+
+**Date**: 2026-04-14
+**Task**: Fix Gemini Live WebSocket, audio playback, barge-in, and greeting
+**Branch**: `feat/voice-backend-token-transcript`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Summary
+
+Debugged and fixed the Gemini Live API voice pipeline end-to-end. Three stacked bugs prevented audio from working: wrong setup message schema for the `BidiGenerateContentConstrained` endpoint, binary WebSocket frames parsed as text, and AudioWorkletNode silently failing to produce output.
+
+## Changes
+
+| Area | Change |
+|------|--------|
+| WebSocket setup | Fixed message format for constrained endpoint (`setup` wrapper, no `speechConfig` at frontend level) |
+| Binary frames | Set `ws.binaryType = "arraybuffer"` + synchronous `TextDecoder` instead of async `Blob.text()` |
+| Audio playback | Replaced `AudioWorkletNode` (pcm-player) with `AudioBufferSourceNode` scheduling |
+| AudioContext | Added explicit `resume()` after async operations |
+| Barge-in | Added `serverContent.interrupted` handler to stop all scheduled audio sources |
+| Greeting | Send `realtimeInput.text` on `setupComplete` to trigger spoken greeting |
+| System prompt | Polished for taste discovery focus with concrete greeting instructions |
+| Backend constraints | Moved voice config, transcription, response modalities to `live_connect_constraints` |
+| Model fix | Changed Haiku model to `claude-haiku-4-5-20251001` |
+| Spec updates | Added Mistakes 6-8 and External API Integration Checklist to cross-layer guide |
+
+## Key Learnings
+
+- `BidiGenerateContentConstrained` (v1alpha, ephemeral tokens) has a **different schema** than `BidiGenerateContent` (v1beta, API keys) — `setup` not `config`, and frontend cannot set `speechConfig`
+- External WebSocket APIs may send binary frames containing JSON — always set `binaryType = "arraybuffer"`
+- `AudioBufferSourceNode` scheduling is more reliable than `AudioWorkletNode` for streaming playback from external APIs
+- `AudioContext.resume()` must be called explicitly after any `await` in a user gesture handler
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `171d6c3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
