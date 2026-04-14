@@ -31,6 +31,8 @@ class AgentState(TypedDict, total=False):
     assistant_message: str
     suggestions: list[str]
     pending_feedback: PendingFeedback | None
+    has_new_signals: bool
+    filtered_signals: str
 ```
 
 #### Graph Entry Points
@@ -56,10 +58,25 @@ async def run_agent_turn(
 #### Persona Services
 
 ```python
-async def extract_persona(
+class PostProcessResult(TypedDict):
+    has_new_signals: bool
+    filtered_signals: str
+
+
+async def post_process_messages(
     messages: list[dict[str, str]],
+    *,
     client: AsyncAnthropic | None,
-    model: str | None = None,
+    model: str,
+) -> PostProcessResult
+
+
+async def build_persona(
+    filtered_signals: str,
+    current_persona: Persona | None,
+    *,
+    client: AsyncAnthropic | None,
+    model: str,
 ) -> Persona
 
 
@@ -93,6 +110,7 @@ def get_anthropic_client(
 class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-latest"
+    anthropic_post_process_model: str = "claude-haiku-4-20250414"
     recommendation_limit: int = 6
     recommendation_score_threshold: float = 0.45
     min_recommendation_signals: int = 2
@@ -102,7 +120,8 @@ class Settings(BaseSettings):
 
 #### Graph Topology
 
-- The graph order is fixed: `greet -> discover -> extract_persona -> embed_persona -> recommend -> feedback`.
+- The graph order is: `greet -> discover -> post_process -> [build_persona] -> embed_persona -> recommend -> feedback`.
+- `post_process` has a conditional edge: routes to `build_persona` when `has_new_signals` is true (default), skips to `embed_persona` when false.
 - `run_agent_turn()` must call the compiled graph with `config={"configurable": {"thread_id": state["session_id"]}}`.
 - `run_agent_turn()` resets `assistant_message` to `""` and `suggestions` to `[]` before invocation so each turn starts clean.
 
@@ -115,12 +134,13 @@ class Settings(BaseSettings):
 
 #### Agent Node Behavior
 
-- `greet()` only appends an assistant message when the existing message history contains no assistant message. Returns `(content, suggestions)` via `_append_assistant_message()`.
-- `discover()` is a no-op when `assistant_message` is already populated in the current turn. Returns `(content, suggestions)` via `_append_assistant_message()`.
-- Both `greet()` and `discover()` perform incremental persona merging via `_persona_for_discovery()` which calls `extract_persona()` then `_merge_personas()` to build a latest persona snapshot before generating replies.
+- `greet()` only appends an assistant message when the existing message history contains no assistant message. Returns via `_append_assistant_message()`.
+- `discover()` is a no-op when `assistant_message` is already populated in the current turn. Returns via `_append_assistant_message()`.
+- Both `greet()` and `discover()` use `state.get("persona")` directly as context for Claude replies (no inline persona extraction).
 - Discovery replies use Claude's multi-turn message format via `build_anthropic_messages()` and return structured JSON `{"reply": string, "suggestions": string[]}`.
-- When Claude is unavailable or fails, `_fallback_discovery_reply()` returns deterministic replies and `_fallback_suggestions()` based on persona completeness stage.
-- `extract_persona()` always writes `state["persona"]`.
+- When Claude is unavailable or fails, `_fallback_discovery_reply()` returns deterministic replies and `_fallback_suggestions()` based on persona completeness stage (likes → budget_tier → hates/rejections).
+- `post_process()` writes `has_new_signals` and `filtered_signals` to state.
+- `build_persona()` writes `state["persona"]`. Only runs when `has_new_signals` is true.
 - `embed_persona()` returns `persona_embedding=[]` when there is no persona or `persona_signal_count(persona) == 0`.
 - `recommend()` returns `recommendations=[]` when either of these is true:
   - `persona_signal_count(persona) < settings.min_recommendation_signals`
@@ -128,28 +148,31 @@ class Settings(BaseSettings):
 - `feedback()` is a no-op when `pending_feedback is None`.
 - `feedback()` must clear `pending_feedback` after processing, including the missing-product path.
 
-#### Persona Extraction Contract
+#### Post-Processing Contract (Three-Stage Pipeline: Stage 1)
 
-- `extract_persona()` must never fail closed for normal chat flow.
-- If `messages` is empty, return an empty `Persona()`.
-- If `client is None` or `model` is empty, log an info fallback event and return the heuristic persona.
-- If Claude fails or returns invalid output, log a warning fallback event and return the heuristic persona.
-- The Claude extraction prompt expects JSON with these snake_case keys only:
-  - `project_type`
-  - `budget_tier`
-  - `role`
-  - `likes`
-  - `hates`
-  - `style_preferences`
-  - `material_preferences`
-  - `categories`
-  - `rejections`
-  - `approvals`
+- `post_process_messages()` detects whether the conversation contains new aesthetic taste signals.
+- Uses a lightweight model (`anthropic_post_process_model`, default Haiku) for cost efficiency.
+- Returns `PostProcessResult(has_new_signals=bool, filtered_signals=str)`.
+- Taste signals include: styles, materials, colors, textures, finishes, budget hints, product approvals/rejections by name.
+- NOT taste signals (must be filtered out): functional requirements (size, dimensions, capacity, shape, quantity), room context, personal details.
+- Must never fail closed: if `client is None`, returns fallback with `has_new_signals=True` and raw conversation transcript.
+- If Claude fails or returns unparseable output, logs warning and returns the same fallback.
+
+#### Persona Building Contract (Three-Stage Pipeline: Stage 2)
+
+- `build_persona()` merges filtered signals into the existing persona via Claude.
+- Uses the primary model (`anthropic_model`, default Sonnet) for quality.
+- Receives `filtered_signals` (text) and `current_persona` (structured), returns a new `Persona`.
+- The prompt constrains `budget_tier` to exactly `"budget"`, `"mid"`, `"premium"`, or `null`.
+- `likes` and `hates` must contain only portable aesthetic taste descriptors (not functional requirements).
+- Must merge new signals into existing persona without losing prior entries.
+- Must never fail closed: if `client is None`, returns `current_persona` (or empty `Persona()` if null).
+- If Claude fails or returns unparseable output, logs warning and returns the same fallback.
 
 #### Persona Embedding Contract
 
 - `persona_to_text()` is the only supported transformation from structured persona to embedding input text.
-- `persona_to_text()` renders `likes` and `hates` first, before project_type, role, budget, categories, styles, materials, approvals, and rejections. This ordering makes taste descriptors the primary embedding signal.
+- `persona_to_text()` renders likes, hates, budget_tier, approvals, and rejections. Taste descriptors (likes/hates) are the primary embedding signal.
 - `embed_persona()` uses CLIP text embeddings on the rendered persona summary, not raw JSON.
 - Empty or early-stage personas must still render to a stable fallback sentence instead of an empty string.
 
@@ -163,10 +186,8 @@ class Settings(BaseSettings):
 
 - `pending_feedback.signal` is constrained to `"like"` or `"dislike"`.
 - `apply_feedback()` mutates a copied persona, never the input model in place.
-- Feedback always adds `product.category` into `persona.categories` if missing.
-- Style and material enrichment comes from `product.tags` intersected with the known keyword sets.
 - Positive feedback appends `product.name` to `approvals` and product tags/name to `likes`; negative feedback appends `product.name` to `rejections` and product tags/name to `hates`.
-- Deduplication must preserve order across categories, style preferences, material preferences, approvals, rejections, likes, and hates.
+- Deduplication must preserve order across approvals, rejections, likes, and hates.
 
 #### Runtime Annotation Contract
 
@@ -177,8 +198,9 @@ class Settings(BaseSettings):
 
 | Setting | Purpose | Default | Behavior |
 |---------|---------|---------|----------|
-| `ANTHROPIC_API_KEY` | Enables Claude-backed discovery and persona extraction | `""` | Empty string disables Anthropic and activates heuristic fallback |
-| `ANTHROPIC_MODEL` | Claude model name passed to `messages.create()` | `claude-3-5-sonnet-latest` | Used by both discovery reply generation and persona extraction |
+| `ANTHROPIC_API_KEY` | Enables Claude-backed discovery and persona pipeline | `""` | Empty string disables Anthropic and activates fallback paths |
+| `ANTHROPIC_MODEL` | Primary Claude model for discovery replies and persona building | `claude-3-5-sonnet-latest` | Used by `discover()` and `build_persona()` |
+| `ANTHROPIC_POST_PROCESS_MODEL` | Lightweight model for taste signal detection | `claude-haiku-4-20250414` | Used by `post_process()` only |
 | `RECOMMENDATION_LIMIT` | Max number of returned recommendations | `6` | Passed directly to Qdrant query |
 | `RECOMMENDATION_SCORE_THRESHOLD` | Minimum Qdrant similarity score | `0.45` | Filters low-similarity products |
 | `MIN_RECOMMENDATION_SIGNALS` | Minimum persona signal count before recommendation retrieval | `2` | Prevents low-signal recommendation churn |
@@ -187,10 +209,12 @@ class Settings(BaseSettings):
 
 | Condition | Expected Behavior | Boundary |
 |-----------|-------------------|----------|
-| Empty `messages` passed to persona extraction | Return `Persona()` | Service |
-| `ANTHROPIC_API_KEY` not configured | `get_anthropic_client()` returns `None`; discovery/persona flow uses fallback paths | Dependency -> Agent |
-| Claude request fails | Log warning/info fallback and continue with heuristic persona or canned discovery question | Service / Agent |
-| Claude returns non-JSON or wrong JSON shape | Treat as fallback, do not break chat flow | Service |
+| `ANTHROPIC_API_KEY` not configured | `get_anthropic_client()` returns `None`; discovery/persona pipeline uses fallback paths | Dependency -> Agent |
+| Post-process Claude request fails | Log warning, return fallback `PostProcessResult(has_new_signals=True, filtered_signals=<transcript>)` | Service |
+| Post-process Claude returns non-JSON | Log warning, return same fallback | Service |
+| Build-persona Claude request fails | Log warning, return `current_persona` (or empty `Persona()`) | Service |
+| Build-persona Claude returns non-JSON or invalid schema | Log warning, return same fallback | Service |
+| Discovery Claude request fails | Log warning, use `_fallback_discovery_reply()` | Agent |
 | Persona has zero signals | `persona_embedding=[]` | Agent |
 | Persona signals below threshold | `recommendations=[]` and `recommendations_skipped` log | Agent -> Recommendation |
 | `pending_feedback` absent | `feedback()` returns state unchanged | Agent |
@@ -201,35 +225,39 @@ class Settings(BaseSettings):
 
 #### Good
 
-- User gives project type, style, and material signals.
-- Persona extraction returns populated fields.
+- User gives taste signals (style, material, budget hints).
+- Post-process detects new signals, build-persona populates fields.
 - `persona_signal_count(persona) >= 2`.
 - Embedding is generated and Qdrant recommendations are returned.
 
 #### Base
 
 - User gives one weak signal and no Anthropic key is configured.
-- Heuristic extraction returns a partial persona.
+- Post-process fallback returns raw transcript with `has_new_signals=True`.
+- Build-persona fallback returns empty `Persona()`.
 - Embedding may still be empty or recommendations remain empty because the signal threshold is not met.
 - Chat flow continues with a fallback discovery question.
 
 #### Bad
 
 - Claude returns malformed output or Qdrant is unavailable.
-- Persona extraction must fall back without breaking the turn.
+- Post-process and build-persona must fall back without breaking the turn.
 - Recommendation retrieval may raise a typed external error at the service boundary, but the API layer must convert that into graceful behavior appropriate for the endpoint.
 
 ### 6. Tests Required
 
 - `tests/test_persona.py`
-  - Assert heuristic extraction populates project, category, likes, and hates signals when Anthropic is missing.
-  - Assert `embed_persona()` renders likes and hates first in the textual summary before CLIP embedding.
-  - Assert `apply_feedback()` merges category/tag/product-name signals into approvals/rejections and likes/hates.
-  - Assert `_normalize_persona_signals()` moves negated materials/styles from `likes` into `hates`.
+  - Assert `post_process_messages()` returns `has_new_signals=True` with transcript when client is None.
+  - Assert `build_persona()` returns empty `Persona()` when client is None and no current persona.
+  - Assert `build_persona()` returns current persona when client is None and current persona exists.
+  - Assert `embed_persona()` renders likes, hates, budget, approvals in the textual summary.
+  - Assert `apply_feedback()` merges product tags/name into likes/hates and product name into approvals/rejections.
+  - Assert `persona_signal_count()` correctly counts all five fields.
 - `tests/test_agent_graph.py`
   - Assert `run_agent_turn()` produces a persona, appends one assistant message, returns suggestions, and returns recommendations for a valid high-signal turn.
   - Assert feedback updates persona approvals, clears `pending_feedback`, and refreshes recommendations.
-  - Assert fallback discovery replies produce both content and suggestions.
+  - Assert fallback discovery replies produce both content and suggestions for first substantive turn and follow-up turns.
+  - Assert small talk produces a redirect reply.
 - When adding new state fields:
   - Add at least one graph test proving the field survives a full `run_agent_turn()` invocation.
 - When changing thresholds or fallback behavior:
@@ -263,59 +291,110 @@ class AgentState(TypedDict, total=False):
 #### Wrong
 
 ```python
-async def extract_persona(messages: list[dict[str, str]], client: AsyncAnthropic) -> Persona:
+async def post_process_messages(messages, *, client, model) -> PostProcessResult:
     response = await client.messages.create(...)
-    return Persona.model_validate(json.loads(response_text))
+    payload = extract_json_object(anthropic_response_text(response.content))
+    return PostProcessResult(has_new_signals=payload["has_new_signals"], ...)
 ```
 
-- Why wrong: this makes the whole chat path dependent on Claude success.
+- Why wrong: if `client` is None or Claude fails, the entire chat turn crashes. Persona pipeline must never fail closed.
 
 #### Correct
 
 ```python
-async def extract_persona(
-    messages: list[dict[str, str]],
-    client: AsyncAnthropic | None,
-    model: str | None = None,
-) -> Persona:
-    heuristic = _heuristic_persona(messages)
-    if client is None or not model:
-        return heuristic
+async def post_process_messages(messages, *, client, model) -> PostProcessResult:
+    fallback = PostProcessResult(has_new_signals=True, filtered_signals=_conversation_transcript(messages))
+    if client is None:
+        return fallback
     try:
-        return await _extract_persona_with_claude(messages, client, model)
-    except Exception:
-        return heuristic
+        response = await client.messages.create(...)
+    except Exception as exc:
+        await logger.awarn("post_process_claude_failed", error=str(exc))
+        return fallback
+    # ... parse with fallback on ValueError too
+```
+
+#### Wrong
+
+```python
+_PERSONA_BUILDER_SYSTEM_PROMPT = """
+Return JSON with: budget_tier, likes, hates, approvals, rejections.
+likes and hates should include all user preferences.
+"""
+```
+
+- Why wrong: without explicit constraints, `budget_tier` gets raw values like "no limit" instead of enum values, and `likes`/`hates` get polluted with functional requirements ("seats 4-6 people") that corrupt the portable taste profile.
+
+#### Correct
+
+```python
+_PERSONA_BUILDER_SYSTEM_PROMPT = (
+    '- budget_tier must be exactly "budget", "mid", "premium", or null.\n'
+    '  Map: "no limit"/"luxury" -> "premium"; "affordable" -> "budget".\n'
+    "- likes and hates are portable aesthetic taste descriptors: "
+    "styles, materials, colors, textures, finishes.\n"
+    "  NOT functional requirements (size, shape, capacity, room type).\n"
+)
 ```
 
 ---
 
-## Design Decision: Heuristic Fallback Before Full API Wiring
+## Design Decision: Three-Stage Persona Pipeline
 
-**Context**: The MVP needs a usable discovery loop even when Anthropic is unavailable during local development or partial rollout.
+**Context**: The original single-step `extract_persona()` used heuristic keyword dictionaries that were brittle and produced low-quality signals. The persona needed to be rebuilt every turn regardless of whether new taste information was present.
 
-**Decision**: Persona extraction and discovery-question generation both degrade to deterministic local logic when Anthropic is unavailable or fails.
+**Decision**: Split persona extraction into three stages: (1) post-processing via lightweight model to detect and filter taste signals, (2) persona building via primary model when new signals exist, (3) embedding. Stage 2 is conditionally skipped via a LangGraph conditional edge when no new signals are detected.
 
 **Why**:
-- Keeps the recommendation loop testable without external API access.
-- Allows PR3 to establish stable service and graph contracts before SSE/API work lands in PR4.
-- Makes failure behavior explicit and testable.
+- Signal-based triggering avoids unnecessary persona rebuilds (cost savings, reduced latency).
+- Using Haiku for post-processing and Sonnet for persona building optimizes cost/quality tradeoff.
+- Separating signal detection from persona building lets each stage have a focused prompt.
+- Graceful degradation at each stage: post-process fallback returns raw transcript, build-persona fallback returns current persona.
 
-**Consequence**: Recommendation quality may be lower without Anthropic, but the user flow should remain operable.
+**Consequence**: Two Claude calls per turn (when signals exist) instead of one, but the Haiku call is cheap. Net code reduction of ~370 lines by removing heuristic keyword dictionaries.
+
+---
+
+## Design Decision: Portable Taste Profiles
+
+**Context**: The persona was accumulating functional requirements (room dimensions, seating capacity, shape preferences) alongside aesthetic taste signals. Since the taste profile is intended to be reused across product categories and sessions, functional requirements polluted cross-context recommendations.
+
+**Decision**: Both the post-process and persona-building prompts explicitly distinguish aesthetic taste signals from functional requirements. Only aesthetic signals (styles, materials, colors, textures, finishes, budget) flow into the persona. Functional requirements are filtered out.
+
+**Why**:
+- A taste profile saying "likes warm minimalism, oak, matte finishes" is portable across lighting, furniture, and decor.
+- A taste profile saying "seats 4-6 people, square shape" is only relevant to one product search and corrupts recommendations for other categories.
+- `budget_tier` is constrained to `"budget"`, `"mid"`, `"premium"`, or `null` to prevent raw signal leakage like "no limit".
+
+**Consequence**: Functional requirements from the conversation are still available in the chat transcript for the discovery reply, but they don't persist into the taste profile.
+
+---
+
+## Design Decision: Graceful Degradation Over Failure
+
+**Context**: The persona pipeline calls Claude twice per turn. Network failures, API rate limits, or malformed responses could break the chat flow.
+
+**Decision**: Every Claude-dependent function in the persona pipeline accepts `client: AsyncAnthropic | None` and returns a deterministic fallback when the client is None or any exception occurs. The fallback never raises.
+
+**Why**:
+- The chat flow must remain operable during local development (no API key), partial outages, or malformed model output.
+- Fallback behavior is explicit and testable: post-process returns raw transcript, build-persona returns current persona, discovery returns canned replies.
+
+**Consequence**: Recommendation quality degrades without Anthropic, but the user flow never breaks. All fallback paths are covered by tests.
 
 ---
 
 ## Design Decision: Likes/Hates As Primary Embedding Signal
 
-**Context**: The persona schema had styles, materials, approvals, and rejections, but these are implementation-level attributes. The recommendation embedding needed a higher-level taste signal.
+**Context**: The persona schema was simplified from 10 fields to 5 taste-focused fields. The recommendation embedding needed to capture the dominant taste signal.
 
-**Decision**: Added `likes` and `hates` fields to `Persona`. These are Claude-synthesized (or heuristically derived) compact taste descriptors. `persona_to_text()` renders them first in the embedding prompt, making them the dominant embedding signal.
+**Decision**: `persona_to_text()` renders `likes` and `hates` first in the embedding text, making them the dominant CLIP embedding signal. Budget tier, approvals, and rejections follow.
 
 **Why**:
-- Taste descriptors like "warm and natural" carry more semantic weight for CLIP embeddings than raw style/material keywords.
+- Taste descriptors like "warm and natural" carry more semantic weight for CLIP embeddings than individual product names.
 - `likes`/`hates` accumulate from both conversation extraction and product feedback, creating a unified taste signal.
-- Rendering them first in the embedding prompt ensures they dominate the CLIP vector space direction.
 
-**Consequence**: Old personas without `likes`/`hates` remain valid (both default to `[]`) and fall back to the prior embedding behavior using styles/materials.
+**Consequence**: Personas with only approvals/rejections (no taste keywords) produce weaker embeddings. This is acceptable because the pipeline progressively builds taste descriptors through conversation.
 
 ---
 
@@ -498,7 +577,7 @@ export type ChatEvent =
 
 #### Bad
 
-- Claude API is down: chat falls back to heuristic discovery reply + heuristic persona, SSE stream still completes with `token` + `persona_update` + `done`.
+- Claude API is down: chat falls back to deterministic discovery reply + fallback persona pipeline, SSE stream still completes with `token` + `persona_update` + `done`.
 - Qdrant is down: recommend raises `ExternalServiceError`, chat catches it in SSE stream and emits `error` event.
 
 ### 6. Tests Required
@@ -549,7 +628,7 @@ async def chat(request: ChatRequest) -> StreamingResponse:
 yield _sse_event({"type": "persona_update", "persona": persona.model_dump()})
 ```
 
-- Why wrong: `model_dump()` without `by_alias=True` emits snake_case keys (`project_type`), but the frontend expects camelCase (`projectType`).
+- Why wrong: `model_dump()` without `by_alias=True` emits snake_case keys (`budget_tier`), but the frontend expects camelCase (`budgetTier`).
 
 #### Correct
 

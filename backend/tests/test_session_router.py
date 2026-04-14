@@ -32,8 +32,7 @@ async def test_get_session_snapshot_returns_saved_state() -> None:
                 {"role": "assistant", "content": "What should I avoid?"},
             ],
             "persona": Persona(
-                categories=["lighting"],
-                style_preferences=["sculptural"],
+                likes=["sculptural"],
                 rejections=["glossy finishes"],
             ),
             "persona_embedding": [0.2, 0.3, 0.4],
@@ -53,16 +52,11 @@ async def test_get_session_snapshot_returns_saved_state() -> None:
             {"role": "assistant", "content": "What should I avoid?"},
         ],
         "persona": {
-            "projectType": None,
             "budgetTier": None,
-            "role": None,
-            "likes": [],
+            "likes": ["sculptural"],
             "hates": [],
-            "stylePreferences": ["sculptural"],
-            "materialPreferences": [],
-            "categories": ["lighting"],
-            "rejections": ["glossy finishes"],
             "approvals": [],
+            "rejections": ["glossy finishes"],
         },
         "recommendations": [
             {

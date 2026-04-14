@@ -20,3 +20,5 @@ class AgentState(TypedDict, total=False):
     assistant_message: str
     suggestions: list[str]
     pending_feedback: PendingFeedback | None
+    has_new_signals: bool
+    filtered_signals: str

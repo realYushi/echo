@@ -43,6 +43,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           ref={inputRef}
           id="chat-input"
           type="text"
+          autoComplete="off"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Describe a room, react to a look, or say what to avoid..."

@@ -96,9 +96,7 @@ export default function DiscoverPage() {
 
   const contextChips = [
     ...new Set([
-      ...(persona.persona.projectType ? [persona.persona.projectType] : []),
       ...(persona.persona.budgetTier ? [persona.persona.budgetTier] : []),
-      ...persona.persona.categories,
     ]),
   ].slice(0, 4);
   const likesSignals = persona.persona.likes;

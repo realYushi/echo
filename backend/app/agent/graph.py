@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Protocol, cast
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 
-from app.agent.nodes import discover, embed_persona, extract_persona, feedback, greet, recommend
+from app.agent.nodes import build_persona, discover, embed_persona, feedback, greet, post_process, recommend
 from app.agent.state import AgentState
 
 if TYPE_CHECKING:
@@ -43,22 +43,27 @@ def build_graph(
     qdrant_client: AsyncQdrantClient,
     anthropic_client: AsyncAnthropic | None,
 ) -> object:
-    """Build the 6-node LangGraph agent graph.
+    """Build the LangGraph agent graph.
 
-    Nodes: greet -> discover -> extract_persona -> embed_persona -> recommend -> feedback
+    Nodes: greet -> discover -> post_process -> [build_persona] -> embed_persona -> recommend -> feedback
     """
     builder = StateGraph(AgentState)
     builder.add_node("greet", partial(greet, anthropic_client=anthropic_client, settings=settings))
     builder.add_node("discover", partial(discover, anthropic_client=anthropic_client, settings=settings))
-    builder.add_node("extract_persona", partial(extract_persona, anthropic_client=anthropic_client, settings=settings))
+    builder.add_node("post_process", partial(post_process, anthropic_client=anthropic_client, settings=settings))
+    builder.add_node("build_persona", partial(build_persona, anthropic_client=anthropic_client, settings=settings))
     builder.add_node("embed_persona", embed_persona)
     builder.add_node("recommend", partial(recommend, qdrant_client=qdrant_client, settings=settings))
     builder.add_node("feedback", partial(feedback, qdrant_client=qdrant_client, settings=settings))
 
     builder.add_edge(START, "greet")
     builder.add_edge("greet", "discover")
-    builder.add_edge("discover", "extract_persona")
-    builder.add_edge("extract_persona", "embed_persona")
+    builder.add_edge("discover", "post_process")
+    builder.add_conditional_edges(
+        "post_process",
+        lambda state: "build_persona" if state.get("has_new_signals", True) else "embed_persona",
+    )
+    builder.add_edge("build_persona", "embed_persona")
     builder.add_edge("embed_persona", "recommend")
     builder.add_edge("recommend", "feedback")
     builder.add_edge("feedback", END)

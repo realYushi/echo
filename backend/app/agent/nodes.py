@@ -12,12 +12,13 @@ from app.services.persona import (
     build_anthropic_messages,
     extract_json_object,
     persona_signal_count,
+    post_process_messages,
+)
+from app.services.persona import (
+    build_persona as build_persona_service,
 )
 from app.services.persona import (
     embed_persona as embed_persona_service,
-)
-from app.services.persona import (
-    extract_persona as extract_persona_service,
 )
 from app.services.recommendation import get_recommendations
 
@@ -124,36 +125,17 @@ def _merge_personas(base: Persona | None, overlay: Persona | None) -> Persona | 
     if overlay is None:
         return merged
 
-    merged.project_type = overlay.project_type or merged.project_type
     merged.budget_tier = overlay.budget_tier or merged.budget_tier
-    merged.role = overlay.role or merged.role
     merged.likes = _unique_preserve_order([*merged.likes, *overlay.likes])
     merged.hates = _unique_preserve_order([*merged.hates, *overlay.hates])
-    merged.style_preferences = _unique_preserve_order([*merged.style_preferences, *overlay.style_preferences])
-    merged.material_preferences = _unique_preserve_order([*merged.material_preferences, *overlay.material_preferences])
-    merged.categories = _unique_preserve_order([*merged.categories, *overlay.categories])
     merged.rejections = _unique_preserve_order([*merged.rejections, *overlay.rejections])
     merged.approvals = _unique_preserve_order([*merged.approvals, *overlay.approvals])
     return merged
 
 
-async def _persona_for_discovery(
-    messages: list[dict[str, str]],
-    persona: Persona | None,
-    client: AsyncAnthropic | None = None,
-    model: str | None = None,
-) -> Persona | None:
-    extracted = await extract_persona_service(messages, client=client, model=model)
-    return _merge_personas(persona, extracted)
-
-
 def _fallback_suggestions(persona: Persona | None) -> list[str]:
-    if persona is None or persona.project_type is None:
+    if persona is None or not persona.likes:
         return ["Kitchen refresh", "Bathroom redo", "Statement lighting"]
-    if not persona.style_preferences:
-        return ["Warm and natural", "Clean and minimal", "Softer and quieter"]
-    if not persona.material_preferences:
-        return ["Oak and stone", "Brass accents", "Matte finishes"]
     if persona.budget_tier is None:
         return ["Keep it budget-aware", "Mid-range is fine", "Open to premium"]
     if not persona.hates and not persona.rejections:
@@ -162,31 +144,19 @@ def _fallback_suggestions(persona: Persona | None) -> list[str]:
 
 
 def _fallback_discovery_reply(persona: Persona | None, latest_user_message: str) -> tuple[str, list[str]]:
-    if persona is None or persona.project_type is None:
+    if persona is None or not persona.likes:
         if _is_small_talk(latest_user_message):
             return (
-                "Doing well. I can help you narrow products fast. "
-                "Which space are we choosing for — kitchen, bathroom, lighting, furniture, or materials?",
+                "Doing well. What kind of products are you looking for today?",
                 _fallback_suggestions(persona),
             )
         if _is_greeting_only(latest_user_message):
             return (
-                "Hi. What space or product category are you shopping for — "
-                "kitchen, bathroom, lighting, furniture, or materials?",
+                "Hi. What kind of products are you looking for today?",
                 _fallback_suggestions(persona),
             )
         return (
-            "Got it. Which part of the project should we focus on first — kitchen, bathroom, lighting, or furniture?",
-            _fallback_suggestions(persona),
-        )
-    if not persona.style_preferences:
-        return (
-            "Helpful. What look feels right to you — for example modern, warm, sculptural, or more minimalist?",
-            _fallback_suggestions(persona),
-        )
-    if not persona.material_preferences:
-        return (
-            "Which materials pull you in, and which ones are an immediate no?",
+            "Got it. Tell me more about what you like and what to avoid.",
             _fallback_suggestions(persona),
         )
     if persona.budget_tier is None:
@@ -223,9 +193,7 @@ def _parse_discovery_payload(raw_text: str) -> tuple[str, list[str]]:
         raise ValueError("Claude discovery payload is missing suggestions")
 
     cleaned_suggestions = [
-        suggestion.strip()
-        for suggestion in suggestions
-        if isinstance(suggestion, str) and suggestion.strip()
+        suggestion.strip() for suggestion in suggestions if isinstance(suggestion, str) and suggestion.strip()
     ]
     return reply.strip(), cleaned_suggestions[:3]
 
@@ -255,29 +223,28 @@ async def greet(
     anthropic_client: AsyncAnthropic | None,
     settings: Settings,
 ) -> AgentState:
-    """Generate greeting and initial discovery questions."""
     messages = state.get("messages", [])
     if _assistant_count(messages) > 0:
         return state
 
     latest_user_message = _latest_user_message(messages)
-    persona_for_reply = await _persona_for_discovery(messages, state.get("persona"), anthropic_client, settings.anthropic_model)
+    persona = state.get("persona")
     content = _GREETING
-    suggestions = _fallback_suggestions(persona_for_reply)
+    suggestions = _fallback_suggestions(persona)
     if anthropic_client is not None:
         try:
             content, suggestions = await _claude_discovery_reply(
                 messages,
-                persona_for_reply,
+                persona,
                 anthropic_client,
                 settings.anthropic_model,
             )
         except Exception as exc:
             await logger.awarn("agent_greet_fallback", session_id=state.get("session_id"), error=str(exc))
             if latest_user_message and not _is_greeting_only(latest_user_message):
-                content, suggestions = _fallback_discovery_reply(persona_for_reply, latest_user_message)
+                content, suggestions = _fallback_discovery_reply(persona, latest_user_message)
     elif latest_user_message and not _is_greeting_only(latest_user_message):
-        content, suggestions = _fallback_discovery_reply(persona_for_reply, latest_user_message)
+        content, suggestions = _fallback_discovery_reply(persona, latest_user_message)
 
     await logger.ainfo("agent_greeted", session_id=state.get("session_id"))
     return _append_assistant_message(state, content, suggestions)
@@ -289,20 +256,19 @@ async def discover(
     anthropic_client: AsyncAnthropic | None,
     settings: Settings,
 ) -> AgentState:
-    """Process user message in discovery conversation."""
     if state.get("assistant_message"):
         return state
 
     messages = state.get("messages", [])
     latest_user_message = _latest_user_message(messages)
-    persona_for_reply = await _persona_for_discovery(messages, state.get("persona"), anthropic_client, settings.anthropic_model)
-    content, suggestions = _fallback_discovery_reply(persona_for_reply, latest_user_message)
+    persona = state.get("persona")
+    content, suggestions = _fallback_discovery_reply(persona, latest_user_message)
 
     if anthropic_client is not None:
         try:
             content, suggestions = await _claude_discovery_reply(
                 messages,
-                persona_for_reply,
+                persona,
                 anthropic_client,
                 settings.anthropic_model,
             )
@@ -313,15 +279,29 @@ async def discover(
     return _append_assistant_message(state, content, suggestions)
 
 
-async def extract_persona(
+async def post_process(
     state: AgentState,
     *,
     anthropic_client: AsyncAnthropic | None,
     settings: Settings,
 ) -> AgentState:
-    """Extract persona JSON from conversation."""
-    persona = await extract_persona_service(
+    result = await post_process_messages(
         state.get("messages", []),
+        client=anthropic_client,
+        model=settings.anthropic_post_process_model,
+    )
+    return {**state, "has_new_signals": result["has_new_signals"], "filtered_signals": result["filtered_signals"]}
+
+
+async def build_persona(
+    state: AgentState,
+    *,
+    anthropic_client: AsyncAnthropic | None,
+    settings: Settings,
+) -> AgentState:
+    persona = await build_persona_service(
+        state.get("filtered_signals", ""),
+        state.get("persona"),
         client=anthropic_client,
         model=settings.anthropic_model,
     )
@@ -329,7 +309,6 @@ async def extract_persona(
 
 
 async def embed_persona(state: AgentState) -> AgentState:
-    """Convert persona to embedding vector."""
     persona = state.get("persona")
     if persona is None or persona_signal_count(persona) == 0:
         return {**state, "persona_embedding": []}
@@ -344,7 +323,6 @@ async def recommend(
     qdrant_client: AsyncQdrantClient,
     settings: Settings,
 ) -> AgentState:
-    """Retrieve recommendations based on persona embedding."""
     persona = state.get("persona")
     persona_embedding = state.get("persona_embedding", [])
     if persona is None or persona_signal_count(persona) < settings.min_recommendation_signals or not persona_embedding:
@@ -371,7 +349,6 @@ async def feedback(
     qdrant_client: AsyncQdrantClient,
     settings: Settings,
 ) -> AgentState:
-    """Process user feedback on recommendations."""
     pending_feedback = state.get("pending_feedback")
     if pending_feedback is None:
         return state

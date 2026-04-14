@@ -98,18 +98,15 @@ class FeedbackRequest(BaseModel):
 Pydantic schema with Optional fields (`app/schemas/persona.py`):
 
 ```python
-# app/schemas/persona.py:6-16
+# app/schemas/persona.py:6-12
 class Persona(CamelModel):
     """User taste persona extracted from conversation signals."""
 
-    project_type: str | None = None
     budget_tier: str | None = None
-    role: str | None = None
-    style_preferences: list[str] = []
-    material_preferences: list[str] = []
-    categories: list[str] = []
-    rejections: list[str] = []
+    likes: list[str] = []
+    hates: list[str] = []
     approvals: list[str] = []
+    rejections: list[str] = []
 ```
 
 CamelModel base for API boundary serialization (`app/schemas/base.py`):
@@ -169,13 +166,18 @@ async def get_clip_embedding(text: str) -> list[float]:
 Agent state as `TypedDict` (`app/agent/state.py`):
 
 ```python
-# app/agent/state.py:10-15
+# app/agent/state.py:14-25
 class AgentState(TypedDict, total=False):
     messages: list[dict[str, str]]
-    persona: Persona | None
+    persona: persona_schema.Persona | None
     persona_embedding: list[float]
-    recommendations: list[Recommendation]
+    recommendations: list[product_schema.Recommendation]
     session_id: str
+    assistant_message: str
+    suggestions: list[str]
+    pending_feedback: PendingFeedback | None
+    has_new_signals: bool
+    filtered_signals: str
 ```
 
 Router pattern -- thin handler with DI and SSE streaming (`app/routers/chat.py`):
@@ -206,7 +208,7 @@ async def chat(
 - **Config**: `asyncio_mode = "auto"` in `pyproject.toml` -- no need for `@pytest.mark.asyncio`
 - **Test paths**: `tests/` directory (configured in `pyproject.toml`)
 - **Coverage target**: Core services (persona, recommendation) must have tests. Routers tested via integration tests.
-- **Test naming**: `test_{function_name}_{scenario}` -- e.g., `test_extract_persona_empty_messages`
+- **Test naming**: `test_{function_name}_{scenario}` -- e.g., `test_build_persona_returns_empty_when_client_missing`
 - **Fixtures**: Shared fixtures in `tests/conftest.py`. Use factory functions over static fixtures.
 - **Mocking**: Mock external services (Claude API, Qdrant) at the client boundary, not inside services.
 
@@ -225,10 +227,10 @@ def sample_messages() -> list[dict[str, str]]:
 
 ```python
 # Good: mock the HTTP client
-async def test_persona_extraction(mock_claude_client):
+async def test_build_persona(mock_claude_client):
     mock_claude_client.messages.create.return_value = ...
-    result = await extract_persona(messages, client=mock_claude_client)
-    assert result.style_preferences == ["modern"]
+    result = await build_persona("likes modern", None, client=mock_claude_client, model="test")
+    assert "modern" in result.likes
 
 # Bad: mock internal functions
 @patch("app.services.persona._call_claude")  # Too tightly coupled

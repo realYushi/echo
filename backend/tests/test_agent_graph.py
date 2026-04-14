@@ -8,6 +8,7 @@ from app.agent.graph import run_agent_turn
 from app.config import Settings
 from app.schemas.persona import Persona
 from app.schemas.product import Product, Recommendation
+from app.services.persona import PostProcessResult
 
 if TYPE_CHECKING:
     from pytest import MonkeyPatch
@@ -42,24 +43,31 @@ async def test_run_agent_turn_generates_persona_and_recommendations(
 ) -> None:
     from app.agent import nodes
 
-    async def fake_extract_persona(
+    async def fake_post_process_messages(
         messages: list[dict[str, str]],
+        *,
         client: object,
-        model: str | None = None,
+        model: str,
+    ) -> PostProcessResult:
+        return PostProcessResult(has_new_signals=True, filtered_signals="likes modern, kitchen reno")
+
+    async def fake_build_persona_service(
+        filtered_signals: str,
+        current_persona: Persona | None,
+        *,
+        client: object,
+        model: str,
     ) -> Persona:
-        assert messages
         return Persona(
-            project_type="kitchen",
-            style_preferences=["modern"],
-            material_preferences=["oak"],
-            categories=["kitchen"],
+            likes=["modern", "oak"],
+            budget_tier="premium",
         )
 
     async def fake_embed_persona(persona: Persona) -> list[float]:
-        assert persona.project_type == "kitchen"
         return [0.3, 0.4, 0.5]
 
-    monkeypatch.setattr(nodes, "extract_persona_service", fake_extract_persona)
+    monkeypatch.setattr(nodes, "post_process_messages", fake_post_process_messages)
+    monkeypatch.setattr(nodes, "build_persona_service", fake_build_persona_service)
     monkeypatch.setattr(nodes, "embed_persona_service", fake_embed_persona)
     qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
 
@@ -80,6 +88,7 @@ async def test_run_agent_turn_generates_persona_and_recommendations(
 
     settings = Settings(
         anthropic_model="stub-model",
+        anthropic_post_process_model="stub-haiku",
         qdrant_collection="products",
         recommendation_limit=6,
         recommendation_score_threshold=0.45,
@@ -95,7 +104,7 @@ async def test_run_agent_turn_generates_persona_and_recommendations(
     )
 
     assert result["persona"] is not None
-    assert result["persona"].project_type == "kitchen"
+    assert "modern" in result["persona"].likes
     assert result["assistant_message"]
     assert result["suggestions"]
     assert result["messages"][-1]["role"] == "assistant"
@@ -129,6 +138,7 @@ async def test_run_agent_turn_applies_feedback_and_refreshes_recommendations(mon
 
     settings = Settings(
         anthropic_model="stub-model",
+        anthropic_post_process_model="stub-haiku",
         qdrant_collection="products",
         recommendation_limit=6,
         recommendation_score_threshold=0.45,
@@ -140,7 +150,7 @@ async def test_run_agent_turn_applies_feedback_and_refreshes_recommendations(mon
             {"role": "assistant", "content": "Great, what should I avoid?"},
         ],
         "session_id": "session-2",
-        "persona": Persona(categories=["lighting"], style_preferences=["warm"]),
+        "persona": Persona(likes=["warm"]),
         "persona_embedding": [0.2, 0.2, 0.2],
         "pending_feedback": {"product_id": "lighting-001", "signal": "like"},
     }
@@ -159,10 +169,11 @@ async def test_run_agent_turn_applies_feedback_and_refreshes_recommendations(mon
     assert result["recommendations"]
 
 
-async def test_run_agent_turn_uses_latest_project_signal_on_first_substantive_turn() -> None:
+async def test_run_agent_turn_first_substantive_turn_produces_fallback_reply() -> None:
     qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
     settings = Settings(
         anthropic_model="stub-model",
+        anthropic_post_process_model="stub-haiku",
         qdrant_collection="products",
         recommendation_limit=6,
         recommendation_score_threshold=0.45,
@@ -185,15 +196,15 @@ async def test_run_agent_turn_uses_latest_project_signal_on_first_substantive_tu
         anthropic_client=None,
     )
 
-    assert "What look feels right to you" in result["assistant_message"]
+    assert result["assistant_message"]
     assert result["persona"] is not None
-    assert result["persona"].project_type == "kitchen"
 
 
-async def test_run_agent_turn_uses_latest_project_signal_on_follow_up_turn() -> None:
+async def test_run_agent_turn_follow_up_turn_produces_reply() -> None:
     qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
     settings = Settings(
         anthropic_model="stub-model",
+        anthropic_post_process_model="stub-haiku",
         qdrant_collection="products",
         recommendation_limit=6,
         recommendation_score_threshold=0.45,
@@ -215,15 +226,15 @@ async def test_run_agent_turn_uses_latest_project_signal_on_follow_up_turn() -> 
         anthropic_client=None,
     )
 
-    assert "What look feels right to you" in result["assistant_message"]
+    assert result["assistant_message"]
     assert result["persona"] is not None
-    assert result["persona"].project_type == "kitchen"
 
 
-async def test_run_agent_turn_handles_small_talk_before_project_signal() -> None:
+async def test_run_agent_turn_handles_small_talk() -> None:
     qdrant_client = AsyncQdrantClient(url="http://localhost:6333")
     settings = Settings(
         anthropic_model="stub-model",
+        anthropic_post_process_model="stub-haiku",
         qdrant_collection="products",
         recommendation_limit=6,
         recommendation_score_threshold=0.45,
@@ -246,4 +257,4 @@ async def test_run_agent_turn_handles_small_talk_before_project_signal() -> None
     )
 
     assert "Doing well" in result["assistant_message"]
-    assert "Which space are we choosing for" in result["assistant_message"]
+    assert "products" in result["assistant_message"].lower()

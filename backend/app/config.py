@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     qdrant_collection: str = "products"
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-5-sonnet-latest"
+    anthropic_post_process_model: str = "claude-haiku-4-20250414"
     clip_model: str = "ViT-B-32"
     recommendation_limit: int = 6
     recommendation_score_threshold: float = 0.45
