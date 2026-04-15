@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { VoiceControls } from "@/components/chat/VoiceControls";
 import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
@@ -11,6 +12,7 @@ import { useRecommendations } from "@/hooks/useRecommendations";
 import { useSessionId } from "@/hooks/useSessionId";
 import { useVoiceChat } from "@/hooks/useVoiceChat";
 import { fetchSessionSnapshot } from "@/lib/api";
+import { createLogger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/types/chat";
 import { EMPTY_PERSONA } from "@/types/persona";
@@ -19,6 +21,8 @@ import type { Recommendation } from "@/types/product";
 function createHydratedMessageId(index: number, role: Message["role"]): string {
   return `restored-${role}-${index}-${crypto.randomUUID()}`;
 }
+
+const logger = createLogger("discover");
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
@@ -99,10 +103,12 @@ export default function DiscoverPage() {
           return;
         }
 
+        const message = getHydrationErrorMessage(error);
+        logger.error({ err: error, sessionId, event: "hydration_failed" }, message);
         replaceMessages([]);
         setPersona(EMPTY_PERSONA);
         setRecommendations([]);
-        setHydrationError(getHydrationErrorMessage(error));
+        setHydrationError(message);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -151,6 +157,7 @@ export default function DiscoverPage() {
   }
 
   return (
+    <ErrorBoundary>
     <main className="relative min-h-screen overflow-x-clip bg-[radial-gradient(circle_at_top_left,rgba(46,106,79,0.16),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(125,84,48,0.12),transparent_22%),linear-gradient(180deg,#f7f1e8_0%,#efe5d6_100%)]">
       <div className="pointer-events-none absolute inset-0 opacity-70">
         <div className="absolute top-[-6rem] left-[-8rem] h-64 w-64 rounded-full bg-[color:var(--accent)]/12 blur-3xl" />
@@ -339,5 +346,6 @@ export default function DiscoverPage() {
         </div>
       </div>
     </main>
+    </ErrorBoundary>
   );
 }

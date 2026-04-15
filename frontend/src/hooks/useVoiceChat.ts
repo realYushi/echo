@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchVoiceToken, postVoiceTranscript } from "@/lib/api";
+import { createLogger } from "@/lib/logger";
 import type { Message } from "@/types/chat";
 import type { Persona } from "@/types/persona";
 import type { Recommendation } from "@/types/product";
 import type { TranscriptMessage } from "@/types/voice";
+
+const logger = createLogger("useVoiceChat");
 
 const GEMINI_WS_URL =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
@@ -212,7 +215,9 @@ export function useVoiceChat(
         }
       } catch (nextError) {
         if (!isAbortError(nextError)) {
-          setError(getErrorMessage(nextError));
+          const msg = getErrorMessage(nextError);
+          setError(msg);
+          logger.error({ err: nextError, sessionId, event: "transcript_post_failed" }, msg);
         }
       }
     },
@@ -451,6 +456,7 @@ export function useVoiceChat(
 
       ws.onerror = () => {
         wsErrorRef.hadError = true;
+        logger.error({ sessionId, event: "voice_ws_error" }, "WebSocket error");
       };
 
       ws.onclose = (event) => {
@@ -463,6 +469,7 @@ export function useVoiceChat(
             (event.code === 1006
               ? "WebSocket connection failed (code 1006). Check the Gemini API key and network."
               : `Voice connection closed (code ${event.code}).`);
+          logger.warn({ sessionId, event: "voice_ws_close", code: event.code, reason }, "Voice connection closed unexpectedly");
           setError(reason);
           onFallbackToText(reason);
         }
@@ -474,6 +481,7 @@ export function useVoiceChat(
       }
 
       const message = getErrorMessage(nextError);
+      logger.error({ err: nextError, sessionId, event: "voice_connect_failed" }, message);
       setError(message);
       onFallbackToText(
         "Unable to start voice mode. Switching to text mode.",

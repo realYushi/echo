@@ -6,7 +6,7 @@
 
 ## Overview
 
-React functional components with TypeScript. Tailwind CSS for styling. No class components. Named exports only (`export function`, never `export default` for components).
+React functional components with TypeScript. Tailwind CSS for styling. Named exports only (`export function`, never `export default` for components). The one exception is `ErrorBoundary.tsx`, which uses a class component because React error boundaries require `componentDidCatch`.
 
 Page components (`app/*/page.tsx`) are the sole exception -- they use `export default function` as required by Next.js App Router.
 
@@ -284,3 +284,4 @@ export function RecommendationGrid({ products, onFeedback, isLoading }: Recommen
 | Feedback callback pattern | `src/components/recommendations/ProductCard.tsx` |
 | Loading/empty/populated states | `src/components/recommendations/RecommendationGrid.tsx` |
 | Empty state component | `src/components/recommendations/EmptyState.tsx` |
+| Error boundary with logging | `src/components/ErrorBoundary.tsx` |

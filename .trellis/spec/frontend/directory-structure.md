@@ -23,6 +23,7 @@ frontend/
 │   ├── components/
 │   │   ├── ui/
 │   │   │   └── Button.tsx          # Variant-based button primitive
+│   │   ├── ErrorBoundary.tsx      # React error boundary with logging
 │   │   ├── chat/
 │   │   │   ├── ChatPanel.tsx       # Chat container (message list + input)
 │   │   │   ├── MessageBubble.tsx   # Single message display (user/assistant)
@@ -39,6 +40,7 @@ frontend/
 │   ├── lib/
 │   │   ├── utils.ts               # cn() helper (clsx + tailwind-merge)
 │   │   ├── api.ts                 # Typed fetch clients (postChat, postFeedback, fetchRecommendations)
+│   │   ├── logger.ts              # Pino logger with createLogger() factory + request ID
 │   │   └── sse.ts                 # SSE stream reader + event parser
 │   ├── types/
 │   │   ├── chat.ts                # Message, ChatRequest, ChatEventSchema
@@ -66,7 +68,7 @@ frontend/
 - **`app/`**: Next.js routes only. Minimal logic -- compose components and hooks. See `src/app/discover/page.tsx` for the pattern: `"use client"` directive, hook calls, layout JSX.
 - **`components/`**: Grouped by feature (`chat/`, `recommendations/`). Shared primitives in `ui/`. Every component uses named exports.
 - **`hooks/`**: Custom hooks. One hook per file. Named `use{Feature}.ts`. Each defines an explicit return interface (`UseChatReturn`, `UseRecommendationsReturn`, etc.).
-- **`lib/`**: Non-React utilities (API clients, helpers). No React imports. `api.ts` owns fetch + Zod validation at the API boundary; `sse.ts` owns stream decoding and event parsing.
+- **`lib/`**: Non-React utilities (API clients, helpers, logger). No React imports. `api.ts` owns fetch + Zod validation at the API boundary; `sse.ts` owns stream decoding and event parsing; `logger.ts` owns structured logging via Pino with child loggers per module.
 - **`types/`**: Shared TypeScript types. One file per domain object. Zod schemas live here alongside inferred types, and chat messages include stable `id` fields for streamed rendering.
 
 New features: add components under a new feature folder in `components/`, add a hook in `hooks/`, add types in `types/`.

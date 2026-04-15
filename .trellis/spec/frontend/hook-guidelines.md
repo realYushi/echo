@@ -104,6 +104,7 @@ function useChat(sessionId: string) {
 
 - **SSE streaming** (chat responses): `lib/sse.ts` exports `streamChat()` -- accepts a full `ChatRequest`, an `onEvent` callback typed as `(event: ChatEvent) => void`, and an optional `AbortSignal`
 - **REST calls** (recommendations, feedback, restore, voice): `lib/api.ts` exports `postChat()`, `postFeedback()`, `fetchRecommendations()`, `fetchSessionSnapshot()`, `fetchVoiceToken()`, `postVoiceTranscript()`
+- **Request correlation**: All API calls send `X-Request-ID` header. The backend middleware accepts it and binds it to structlog contextvars, enabling cross-stack log correlation.
 - **No data fetching library for MVP** -- plain fetch is sufficient for the current endpoints. Add React Query if complexity grows.
 
 **API client signatures** from `src/lib/api.ts`:
@@ -161,6 +162,22 @@ export async function streamChat(
 - Use `useCallback` for functions returned from hooks to maintain stable references (see `useChat.ts:18`, `usePersona.ts:20`)
 - Use functional state updates `setState((prev) => ...)` when the new state depends on previous state
 - Expose `error: string | null` for hooks that involve async operations
+- **Log errors via structured logger**: Create a module-scoped logger and log all error paths before setting UI error state. This ensures errors are captured in the console even after the UI state resets.
+
+**Error logging pattern** in hooks:
+```ts
+import { createLogger } from "@/lib/logger";
+const logger = createLogger("useChat");
+
+// In catch blocks:
+catch (nextError) {
+  const message = getErrorMessage(nextError);
+  logger.error({ err: nextError, sessionId, event: "chat_send_failed" }, message);
+  setError(message);
+}
+```
+
+Each hook logs with its own module name so console output is traceable.
 
 ---
 
@@ -196,3 +213,4 @@ export async function streamChat(
 | Voice WebSocket + audio pipeline | `src/hooks/useVoiceChat.ts` |
 | Typed API clients (fetch wrappers) | `src/lib/api.ts` |
 | SSE streaming helper | `src/lib/sse.ts` |
+| Structured logger factory | `src/lib/logger.ts` |

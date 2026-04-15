@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ChatRequest } from "@/types/chat";
+import { createLogger, getRequestId } from "@/lib/logger";
 import {
   PersonaSchema,
   type FeedbackSignal,
@@ -15,6 +16,8 @@ import {
   type TranscriptResponse,
 } from "@/types/voice";
 
+const logger = createLogger("api");
+
 const ApiErrorSchema = z.object({
   error: z.object({
     message: z.string(),
@@ -24,6 +27,13 @@ const ApiErrorSchema = z.object({
 const FeedbackResponseSchema = z.object({
   persona: PersonaSchema,
 });
+
+function requestHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Request-ID": getRequestId(),
+  };
+}
 
 async function getErrorMessage(response: Response): Promise<string> {
   try {
@@ -45,15 +55,15 @@ export async function postChat(
 ): Promise<ReadableStream<Uint8Array>> {
   const response = await fetch("/api/chat", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: requestHeaders(),
     body: JSON.stringify(request),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: "/api/chat" }, message);
+    throw new Error(message);
   }
 
   if (!response.body) {
@@ -70,14 +80,14 @@ export async function postFeedback(
 ): Promise<{ persona: Persona }> {
   const response = await fetch("/api/feedback", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: requestHeaders(),
     body: JSON.stringify({ productId, signal, sessionId }),
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: "/api/feedback", productId, signal }, message);
+    throw new Error(message);
   }
 
   const data = await response.json();
@@ -98,15 +108,15 @@ export async function fetchRecommendations(
 
   const response = await fetch("/api/recommend", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: requestHeaders(),
     body: JSON.stringify(payload),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: "/api/recommend", sessionId }, message);
+    throw new Error(message);
   }
 
   const data = await response.json();
@@ -119,11 +129,14 @@ export async function fetchSessionSnapshot(
 ): Promise<SessionSnapshot> {
   const response = await fetch(`/api/sessions/${sessionId}`, {
     method: "GET",
+    headers: { "X-Request-ID": getRequestId() },
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: `/api/sessions/${sessionId}` }, message);
+    throw new Error(message);
   }
 
   const data = await response.json();
@@ -135,11 +148,14 @@ export async function fetchVoiceToken(
 ): Promise<VoiceTokenResponse> {
   const response = await fetch("/api/voice/token", {
     method: "POST",
+    headers: { "X-Request-ID": getRequestId() },
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: "/api/voice/token" }, message);
+    throw new Error(message);
   }
 
   const data = await response.json();
@@ -153,15 +169,15 @@ export async function postVoiceTranscript(
 ): Promise<TranscriptResponse> {
   const response = await fetch("/api/voice/transcript", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: requestHeaders(),
     body: JSON.stringify({ sessionId, messages }),
     signal,
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    const message = await getErrorMessage(response);
+    logger.error({ status: response.status, path: "/api/voice/transcript", sessionId }, message);
+    throw new Error(message);
   }
 
   const data = await response.json();

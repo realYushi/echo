@@ -1,9 +1,12 @@
 import { postChat } from "@/lib/api";
+import { createLogger } from "@/lib/logger";
 import {
   ChatEventSchema,
   type ChatEvent,
   type ChatRequest,
 } from "@/types/chat";
+
+const logger = createLogger("sse");
 
 function parseChunk(chunk: string): ChatEvent | null {
   const payload = chunk
@@ -16,7 +19,12 @@ function parseChunk(chunk: string): ChatEvent | null {
     return null;
   }
 
-  return ChatEventSchema.parse(JSON.parse(payload));
+  try {
+    return ChatEventSchema.parse(JSON.parse(payload));
+  } catch (err) {
+    logger.error({ err, payload: payload.slice(0, 200) }, "sse_parse_error");
+    return null;
+  }
 }
 
 export async function streamChat(

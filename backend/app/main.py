@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -68,6 +70,30 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Request logging middleware
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):  # type: ignore[no-untyped-def]
+        request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
+        logger = structlog.get_logger("request")
+        start = time.perf_counter()
+        await logger.ainfo("request_started", method=request.method, path=request.url.path)
+
+        response = await call_next(request)
+
+        duration_ms = round((time.perf_counter() - start) * 1000, 1)
+        await logger.ainfo(
+            "request_finished",
+            method=request.method,
+            path=request.url.path,
+            status=response.status_code,
+            duration_ms=duration_ms,
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
 
     # Global exception handler for AppError hierarchy
     @app.exception_handler(AppError)

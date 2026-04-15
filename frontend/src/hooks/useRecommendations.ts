@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchRecommendations } from "@/lib/api";
+import { createLogger } from "@/lib/logger";
 import type { Recommendation } from "@/types/product";
+
+const logger = createLogger("useRecommendations");
 
 interface UseRecommendationsReturn {
   products: Recommendation[];
@@ -74,7 +77,9 @@ export function useRecommendations(
         return [];
       }
 
-      setError(getErrorMessage(nextError));
+      const message = getErrorMessage(nextError);
+      logger.error({ err: nextError, sessionId, event: "recommendations_fetch_failed" }, message);
+      setError(message);
       return [];
     } finally {
       if (abortControllerRef.current === controller) {

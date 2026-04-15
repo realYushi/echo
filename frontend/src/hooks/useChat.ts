@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createLogger } from "@/lib/logger";
 import { streamChat } from "@/lib/sse";
 import type { ChatRequest, Message } from "@/types/chat";
 import type { Persona } from "@/types/persona";
+
+const logger = createLogger("useChat");
 
 interface UseChatOptions {
   persona: Persona | null;
@@ -133,6 +136,7 @@ export function useChat(
               case "error":
                 streamErrored = true;
                 setError(event.message);
+                logger.error({ sessionId, event: "chat_stream_error", message: event.message });
                 if (!receivedAssistantContent) {
                   setMessages((prev) =>
                     appendAssistantContent(prev, event.message),
@@ -155,6 +159,7 @@ export function useChat(
         }
 
         const message = getErrorMessage(nextError);
+        logger.error({ err: nextError, sessionId, event: "chat_send_failed" }, message);
         setError(message);
         setSuggestions([]);
         if (!receivedAssistantContent) {

@@ -18,7 +18,7 @@ TypeScript strict mode. ESLint 9 (flat config) + Prettier 3. Vitest 3 for testin
 | `useEffect` for derived state | Unnecessary re-renders, stale bugs | Compute during render |
 | `<div onClick>` for interactive elements | Accessibility | `<button>` or `<a>` |
 | Inline styles | Inconsistent, not responsive | Tailwind classes |
-| `console.log` in committed code | Noise in production | Remove or use a logger |
+| `console.log` in committed code | Noise in production | Use `createLogger()` from `src/lib/logger.ts` |
 | Index as key for dynamic lists | Re-render bugs | Use stable IDs (see `RecommendationGrid.tsx:31` using `rec.product.id`) |
 | Barrel exports (`index.ts` re-exporting everything) | Slow bundling, circular deps | Import directly from the file |
 | `export default` for components | Inconsistent naming across imports | Named exports (`export function Component`) |
@@ -29,7 +29,7 @@ TypeScript strict mode. ESLint 9 (flat config) + Prettier 3. Vitest 3 for testin
 
 - **Strict TypeScript** -- `"strict": true` in `tsconfig.json:8`, zero `any`
 - **Named exports** -- `export function Component()`, not `export default` (page components excepted)
-- **Error boundaries** -- wrap major sections to prevent full-page crashes
+- **Error boundaries** -- wrap major sections to prevent full-page crashes. See `src/components/ErrorBoundary.tsx` for the pattern: class component that catches rendering errors, logs them via `createLogger("ErrorBoundary")`, and shows a "Try again" fallback.
 - **Loading/error states** -- every async operation shows feedback to the user (see `RecommendationGrid.tsx` for loading/empty/populated pattern)
 - **Tailwind** -- all styling via utility classes, conditional classes via `cn()` from `src/lib/utils.ts`
 - **`"use client"` directive** -- required on any component that uses hooks, state, or event handlers
@@ -171,3 +171,4 @@ npm run test         # vitest
 | PostCSS / Tailwind v4 | `postcss.config.mjs` |
 | Tailwind entry | `src/styles/globals.css` |
 | Package scripts | `package.json` |
+| Structured logger | `src/lib/logger.ts` |

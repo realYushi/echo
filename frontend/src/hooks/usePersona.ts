@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { postFeedback } from "@/lib/api";
+import { createLogger } from "@/lib/logger";
 import type { Persona, FeedbackSignal } from "@/types/persona";
 import { EMPTY_PERSONA } from "@/types/persona";
+
+const logger = createLogger("usePersona");
 
 interface UsePersonaReturn {
   persona: Persona;
@@ -54,7 +57,9 @@ export function usePersona(sessionId: string): UsePersonaReturn {
         setPersonaState(response.persona);
         return response.persona;
       } catch (nextError) {
-        setError(getErrorMessage(nextError));
+        const message = getErrorMessage(nextError);
+        logger.error({ err: nextError, sessionId, event: "feedback_failed", productId, signal }, message);
+        setError(message);
         return null;
       } finally {
         setIsSubmitting(false);
