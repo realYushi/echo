@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-04-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~616 | Active |
+| `journal-1.md` | ~681 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-04-17 | Polish Gemini Live system prompt + fix silent systemInstruction drop | `f893b6f` | `main` |
 | 11 | 2026-04-17 | Expand taste profile into conversation-state inspector | `16ec749` | `main` |
 | 10 | 2026-04-14 | Fix Gemini Live WebSocket, audio playback, barge-in, and greeting | `171d6c3` | `feat/voice-backend-token-transcript` |
 | 9 | 2026-04-14 | Three-stage persona pipeline with portable taste profiles | `a2d25ff` | `main` |

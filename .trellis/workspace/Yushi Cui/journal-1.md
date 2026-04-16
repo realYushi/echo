@@ -614,3 +614,68 @@ Replaced the minimal taste-profile card on `/discover` with a full conversation-
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Polish Gemini Live system prompt + fix silent systemInstruction drop
+
+**Date**: 2026-04-17
+**Task**: Polish Gemini Live system prompt + fix silent systemInstruction drop
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## What changed
+
+| Area | Change |
+|------|--------|
+| Backend | Moved Echo voice prompt into `_VOICE_SYSTEM_INSTRUCTION` and injected it into `live_connect_constraints.config.system_instruction` when minting ephemeral tokens. |
+| Backend | Added per-file ruff `E501` ignore for `app/services/voice.py` (the prompt is natural-language paragraphs). |
+| Frontend | Removed `SYSTEM_INSTRUCTION` constant and `setup.systemInstruction` from `useVoiceChat.ts` — those were being silently dropped by the constrained endpoint. |
+| Spec | Extended cross-layer guide Mistake 6 with the silent-field-drop sub-gotcha and exact symptom ("I'm a large language model, created by Google…"). |
+| Prompt content | Aligned to Google Live API best-practices structure (Persona → Rules → Guardrails), locked the verbatim opener, added explicit guardrails for identity questions and specific-product asks, reshaped wrap-up to remove "picks on the right" UI direction. |
+
+## Why
+
+End-to-end voice smoke test surfaced that Gemini was running with its base persona and offering to find chairs — none of our prompt was active. Root cause: `BidiGenerateContentConstrained` (the constrained ephemeral-token endpoint we use) silently drops any `setup` field not declared in the token's `live_connect_constraints`. Sending `systemInstruction` from the browser was therefore a no-op.
+
+## How tested
+
+- Backend: `ruff check app/`, `mypy app/services/voice.py --strict`, `pytest` (23/23 pass).
+- Frontend: `tsc --noEmit`, `next lint`, `vitest --run` (27/27 pass).
+- Manual: full voice smoke test through 5 taste categories (style → material → finish → color → budget) — opener fires verbatim, soft-redirects work, wrap-up no longer points at UI panel.
+
+## Updated files
+
+- `backend/app/services/voice.py`
+- `backend/pyproject.toml`
+- `frontend/src/hooks/useVoiceChat.ts`
+- `.trellis/spec/guides/cross-layer-thinking-guide.md`
+- `.trellis/tasks/04-17-polish-voice-system-prompt/` (new, then archived)
+
+## Lessons
+
+- For any constrained-token streaming API: governance fields (`systemInstruction`, `tools`, `speechConfig`, transcription configs) **must** live in the token constraints, not the client setup. The server gives no error when it drops them.
+- The cross-layer guide already had the broader endpoint-variant warning, but lacked the concrete symptom — added it so the next person recognizes the failure mode in seconds.
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f893b6f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
