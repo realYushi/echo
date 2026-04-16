@@ -107,6 +107,8 @@ After implementation:
 
 **Good**: Verify the wire format against the **specific endpoint variant** being used. Different authentication methods (API key vs. ephemeral token) often route to different server endpoints with different schemas. Example: Gemini's `BidiGenerateContent` (v1beta, API key) accepts `config` wrapper with flat fields; `BidiGenerateContentConstrained` (v1alpha, ephemeral token) accepts `setup` wrapper with nested `generationConfig` and restricts which fields the frontend can set.
 
+**Sub-gotcha: silent field drop on constrained endpoints.** When the server endpoint is "constrained" (e.g. `BidiGenerateContentConstrained`), any field the client sends in `setup` that isn't declared in the ephemeral token's constraints is **silently dropped** — no error, no warning, model just runs without it. Symptom: the agent ignores its persona and responds as the base model ("I'm a large language model, created by Google…"). Fix: any governance field (`systemInstruction`, `tools`, `speechConfig`, `inputAudioTranscription`, etc.) must be baked into `live_connect_constraints.config` at token-mint time on the **backend**, not sent from the browser. See `backend/app/services/voice.py::create_ephemeral_token`.
+
 ### Mistake 7: Assuming WebSocket Text Frames
 
 **Bad**: Parsing `event.data` as a string directly (`JSON.parse(event.data)`), assuming the server sends text frames.
