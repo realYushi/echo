@@ -546,3 +546,71 @@ Debugged and fixed the Gemini Live API voice pipeline end-to-end. Three stacked 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Expand taste profile into conversation-state inspector
+
+**Date**: 2026-04-17
+**Task**: Expand taste profile into conversation-state inspector
+**Branch**: `main`
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+## Summary
+
+Replaced the minimal taste-profile card on `/discover` with a full conversation-state inspector that surfaces all persona fields plus a Developer-mode raw view, organized into independently collapsible sections.
+
+## Changes
+
+| Area | Description |
+|------|-------------|
+| New UI primitive | `CollapsibleSection` — chevron button + `aria-expanded`/`aria-controls`, optional `headerRight` slot, body toggled via `hidden` attr |
+| New feature component | `ProfileInspector` — 6 polished sections (A Budget, B Likes, C Dislikes, D Approvals, E Rejections, F Session summary) + 5 dev-mode sections (G Raw persona JSON, H Recommendations w/ scores, I Assistant suggestions, J Live chat state, K Raw session snapshot) |
+| Dev-mode persistence | `localStorage` key `echo.profile-inspector.dev-mode`, SSR-guarded, follows existing `useSessionId.ts` naming |
+| Section state | Per-section `useState`, default collapsed, in-memory only (not persisted) |
+| ID resolution | Approvals/rejections resolve to product names via client-side `recommendations` Map; falls back to raw ID |
+| Spec sync | Updated `.trellis/spec/frontend/directory-structure.md` to list new `profile/` folder and `CollapsibleSection.tsx` |
+
+## Decisions
+
+- Audience: both polished + developer, behind a toggle (not one or the other).
+- No backend changes; all info sourced from client-side state (persona, recommendations, chat hook).
+- Kept the tooling/infra uncommitted changes out of this commit — scope limited to the feature.
+
+## Updated Files
+
+- `frontend/src/components/ui/CollapsibleSection.tsx` (new)
+- `frontend/src/components/ui/CollapsibleSection.test.tsx` (new)
+- `frontend/src/components/profile/ProfileInspector.tsx` (new)
+- `frontend/src/app/discover/page.tsx` (replaced inline taste-profile section)
+- `.trellis/spec/frontend/directory-structure.md` (spec sync)
+
+## Verification
+
+- `npm run lint` clean
+- `npm run typecheck` clean
+- `npm run test -- --run`: 27/27 passed (3 new CollapsibleSection tests)
+- Check agent caught + fixed 3 non-null assertions in the test file
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `16ec749` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

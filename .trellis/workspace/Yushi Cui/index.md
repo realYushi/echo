@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-04-14
+- **Total Sessions**: 11
+- **Last Active**: 2026-04-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~548 | Active |
+| `journal-1.md` | ~616 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-04-17 | Expand taste profile into conversation-state inspector | `16ec749` | `main` |
 | 10 | 2026-04-14 | Fix Gemini Live WebSocket, audio playback, barge-in, and greeting | `171d6c3` | `feat/voice-backend-token-transcript` |
 | 9 | 2026-04-14 | Three-stage persona pipeline with portable taste profiles | `a2d25ff` | `main` |
 | 8 | 2026-04-14 | Natural chatbot + spec sync | `2dda6b2`, `0ea5504` | `task/natural-chatbot` |
