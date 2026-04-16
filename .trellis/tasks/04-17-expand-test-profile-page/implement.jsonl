@@ -1,0 +1,9 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "New CollapsibleSection primitive + ProfileInspector must follow component structure, variant, and a11y rules"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Confirm placement: ui/ for primitive, profile/ for feature component, PascalCase"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Local useState for section open/closed; localStorage only for small UI pref (dev mode toggle)"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Strict typing for props, no any, import type"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "If extracting a localStorage hook, follow Use{Feature}Return + SSR guard pattern like useSessionId"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Run lint/typecheck/test; no console.log — use createLogger"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse existing Button + cn() where possible; only introduce new primitives when nothing fits"}

@@ -1,0 +1,6 @@
+{"file": ".claude/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".claude/commands/trellis/check.md", "reason": "Code quality check spec"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify new components follow conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Pre-commit checklist must be met"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify no any, proper import type"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Verify no inappropriate global state / localStorage misuse"}

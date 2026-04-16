@@ -22,12 +22,15 @@ frontend/
 │   │       └── page.tsx            # Split-pane discovery view ("use client")
 │   ├── components/
 │   │   ├── ui/
-│   │   │   └── Button.tsx          # Variant-based button primitive
+│   │   │   ├── Button.tsx              # Variant-based button primitive
+│   │   │   └── CollapsibleSection.tsx  # Foldable section with chevron + aria-expanded/controls
 │   │   ├── ErrorBoundary.tsx      # React error boundary with logging
 │   │   ├── chat/
 │   │   │   ├── ChatPanel.tsx       # Chat container (message list + input)
 │   │   │   ├── MessageBubble.tsx   # Single message display (user/assistant)
 │   │   │   └── ChatInput.tsx       # Text input + send button
+│   │   ├── profile/
+│   │   │   └── ProfileInspector.tsx    # Conversation-state inspector (persona + dev-mode raw view)
 │   │   └── recommendations/
 │   │       ├── RecommendationGrid.tsx  # Grid with loading/empty/populated states
 │   │       ├── ProductCard.tsx     # Product display with feedback buttons

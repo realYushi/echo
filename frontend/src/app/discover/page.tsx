@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { VoiceControls } from "@/components/chat/VoiceControls";
+import { ProfileInspector } from "@/components/profile/ProfileInspector";
 import { RecommendationGrid } from "@/components/recommendations/RecommendationGrid";
 import { Button } from "@/components/ui/Button";
 import { useChat } from "@/hooks/useChat";
@@ -126,13 +127,6 @@ export default function DiscoverPage() {
     sessionId,
   ]);
 
-  const contextChips = [
-    ...new Set([
-      ...(persona.persona.budgetTier ? [persona.persona.budgetTier] : []),
-    ]),
-  ].slice(0, 4);
-  const likesSignals = persona.persona.likes;
-  const hatesSignals = persona.persona.hates;
   const hasConversation = chat.messages.length > 0;
 
   function handleModeChange(nextMode: "text" | "voice") {
@@ -252,76 +246,18 @@ export default function DiscoverPage() {
           </div>
 
           <aside className="flex min-h-[40rem] flex-col gap-4">
-            <section className="rounded-[32px] border border-[color:var(--line)] bg-white/70 p-5 shadow-[0_24px_60px_rgba(29,42,34,0.08)] backdrop-blur-sm">
-              <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
-                Taste profile
-              </p>
-              <h2 className="mt-2 text-2xl text-[color:var(--ink)]">
-                Signals coming into focus.
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
-                Echo updates this profile as the conversation evolves, then uses
-                it to reshape the shortlist in real time.
-              </p>
-
-              {contextChips.length > 0 && (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {contextChips.map((chip) => (
-                    <span
-                      key={chip}
-                      className="rounded-full border border-[color:var(--line)] bg-[color:var(--accent-soft)]/55 px-3 py-1 text-xs text-[color:var(--ink)]"
-                    >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4">
-                  <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
-                    What it is like
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {likesSignals.length > 0 ? (
-                      likesSignals.map((item) => (
-                        <span
-                          key={item}
-                          className="rounded-full border border-[color:var(--accent)]/25 bg-[color:var(--accent-soft)]/40 px-2.5 py-1 text-xs text-[color:var(--ink)]"
-                        >
-                          {item}
-                        </span>
-                      ))
-                    ) : (
-                      <p className="text-xs text-[color:var(--muted)]">
-                        Positive signals will show up here.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--panel)] px-4 py-4">
-                  <p className="text-[11px] tracking-[0.18em] text-[color:var(--muted)] uppercase">
-                    What it is not like
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {hatesSignals.length > 0 ? (
-                      hatesSignals.map((item) => (
-                        <span
-                          key={item}
-                          className="rounded-full border border-red-200 bg-red-50/60 px-2.5 py-1 text-xs text-[color:var(--ink)]"
-                        >
-                          {item}
-                        </span>
-                      ))
-                    ) : (
-                      <p className="text-xs text-[color:var(--muted)]">
-                        Dislikes help Echo steer away faster.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
+            <ProfileInspector
+              persona={persona.persona}
+              recommendations={recommendations.products}
+              chatState={{
+                messages: chat.messages,
+                suggestions: chat.suggestions,
+                isStreaming: chat.isStreaming,
+                error: chat.error,
+              }}
+              sessionId={resolvedSessionId}
+              isHydrating={isHydrating}
+            />
 
             <section className="flex-1 rounded-[32px] border border-[color:var(--line)] bg-white/70 p-5 shadow-[0_24px_60px_rgba(29,42,34,0.08)] backdrop-blur-sm">
               <RecommendationGrid
