@@ -4,10 +4,10 @@ dev:
 	./scripts/dev.sh
 
 up:
-	docker compose up -d
+	docker-compose up -d
 
 down:
-	docker compose down
+	docker-compose down
 
 backend-dev:
 	cd backend && uvicorn app.main:app --reload --port 8000

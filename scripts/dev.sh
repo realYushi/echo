@@ -37,7 +37,7 @@ require_command uv
 require_command npm
 
 echo "Starting Postgres and Qdrant with docker compose..."
-(cd "${ROOT_DIR}" && docker compose up -d)
+(cd "${ROOT_DIR}" && docker-compose up -d)
 
 echo "Starting backend on http://127.0.0.1:8000 ..."
 (

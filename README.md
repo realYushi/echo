@@ -29,10 +29,14 @@ User  ←→  Next.js (frontend)  ←→  FastAPI (backend)
 ### 1. Start infrastructure
 
 ```bash
-docker compose up -d
+docker-compose up -d
 ```
 
-This starts PostgreSQL on port 5432 and Qdrant on port 6333.
+This starts PostgreSQL on port 5432 and Qdrant on port 6333. You can also use:
+
+```bash
+make up
+```
 
 ### 2. Backend
 
@@ -61,6 +65,17 @@ Open http://localhost:3000/discover
 make lint    # ruff + mypy (backend), eslint (frontend)
 make test    # pytest (backend), vitest (frontend)
 ```
+
+### Developer tooling
+
+This repository includes Trellis-powered agent workflow helpers under `.trellis/`, `.claude/`, `.codex/`, and `.agents/`. Session-start hooks inject a compact workflow index, current task state, and relevant project guidelines so agents can lazy-load full docs only when needed.
+
+Recent tooling support includes:
+
+- UTF-8-safe Claude statusline output on Windows
+- Compact workflow context injection for Claude and Codex hooks
+- Factory Droid platform detection via `.factory/`
+- Local planning artifacts under `plans/`
 
 ## Key Features
 
