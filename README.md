@@ -143,6 +143,18 @@ make dev
 
 This starts Docker infrastructure, the backend, and the frontend together.
 
+### Containerized app stack
+
+```bash
+make container-start
+```
+
+This uses the Apple Container CLI to build and start PostgreSQL, Qdrant, the backend image, and the frontend image. Stop it with:
+
+```bash
+make container-down
+```
+
 ## Quality checks
 
 ```bash
